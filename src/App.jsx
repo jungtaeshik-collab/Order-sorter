@@ -21,7 +21,8 @@ const MASTER_PATH = "order-sorter/master";
 
 // ── 유틸 함수 ──
 function normalize(s) {
-  return s.replace(/[-_\s()[\]]/g, "").toUpperCase();
+  // 하이픈/공백/괄호/한글 제거 → 영숫자만
+  return s.replace(/[-_\s()[\]]/g, "").replace(/[가-힣]/g, "").toUpperCase();
 }
 function extractTokens(s) {
   const tokens = [];
@@ -371,9 +372,12 @@ export default function App() {
           const eNum = eVal != null && eVal !== "" ? Number(eVal) : null;
           const total = eNum != null && packQty != null ? eNum * packQty : null;
           // 수량 없는 항목은 그룹 -1 (맨 위)
-          const noQty = eNum == null;
+          // 발주수량 없거나 개입수 없으면 합계 불가 → 맨 위
+          const noQty = eNum == null || packQty == null;
           const sortSuffix = getSortSuffix(code);
-          result.push({ group: noQty ? -1 : group, sortNum, sortSuffix, code, master:match?.mc||null, method, packQty, total, noQty, row:[...row] });
+          // 한글 품목처럼 코드가 없으면 마스터 rank를 sortNum으로 사용
+          const effectiveSortNum = (sortNum === 999999 && match) ? match.rank : sortNum;
+          result.push({ group: noQty ? -1 : group, sortNum: effectiveSortNum, sortSuffix, code, master:match?.mc||null, method, packQty, total, noQty, row:[...row] });
         });
         result.sort((a, b) => a.group - b.group || a.sortNum - b.sortNum || a.sortSuffix.localeCompare(b.sortSuffix));
         const matched = result.filter((x) => x.master).length;
