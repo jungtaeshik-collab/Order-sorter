@@ -296,3 +296,66 @@ td { padding: 8px 12px; border-bottom: 1px solid rgba(0,0,0,0.04); }
   .stats-row { flex-direction: column; }
   .card { padding: 24px 20px; }
 }
+
+/* ── 헤더 우측 ── */
+.header-right { display: flex; align-items: center; gap: 12px; }
+
+.btn-master-upload {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-master-upload:hover { background: rgba(255,255,255,0.25); }
+.btn-master-upload.disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── 토스트 알림 ── */
+.toast {
+  position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
+  padding: 12px 24px; border-radius: 8px;
+  font-size: 14px; font-weight: 600;
+  z-index: 200; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  animation: fadeIn 0.2s ease;
+}
+.toast.ok { background: #2E7D32; color: #fff; }
+.toast.err { background: #C62828; color: #fff; }
+@keyframes fadeIn { from { opacity:0; transform: translateX(-50%) translateY(-8px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+
+/* ── 스피너 ── */
+.spinner {
+  width: 40px; height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 마스터 없음 안내 ── */
+.no-master {
+  background: #FFF3E0;
+  border: 1px solid #FFB74D;
+  border-radius: 8px;
+  padding: 16px 20px;
+  color: #E65100;
+  font-size: 14px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+/* 드래그 오버 효과 */
+.upload-zone.drag-over {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  transform: scale(1.01);
+}
+.upload-zone { cursor: pointer; }
