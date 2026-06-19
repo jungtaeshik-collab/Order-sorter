@@ -113,6 +113,7 @@ function getGroup(code) {
   if (prefix === "F") return 0;
   if (prefix === "L") return 1;
   if (prefix === "V") return 2;
+  if (prefix === "K") return 4;
   return 99;
 }
 function getSortNum(code) {
@@ -174,14 +175,17 @@ function base64ToCodes(b64) {
   return JSON.parse(json);
 }
 
-const GROUP_LABELS = { 0:"F 시리즈", 1:"L 시리즈", 2:"V 시리즈", 3:"FL 시리즈", 99:"기타" };
+const GROUP_LABELS = { "-1":"⚠ 수량 미확인", 0:"F 시리즈", 1:"L 시리즈", 2:"V 시리즈", 3:"FL 시리즈", 4:"K 시리즈", 99:"기타" };
 const GROUP_COLORS = {
-  0:  { bg:"#1565C0", light:"#E3F0FF", alt:"#CCE0FF" },
-  1:  { bg:"#2E7D32", light:"#E8F5E9", alt:"#D0EBD1" },
-  2:  { bg:"#F57F17", light:"#FFF8E1", alt:"#FDEFC3" },
-  3:  { bg:"#6A1B9A", light:"#F3E5F5", alt:"#E4C8EE" },
-  99: { bg:"#546E7A", light:"#FAFAFA", alt:"#EFEFEF" },
+  "-1":{ bg:"#B71C1C", light:"#FFEBEE", alt:"#FFCDD2" },
+  0:   { bg:"#1565C0", light:"#E3F0FF", alt:"#CCE0FF" },
+  1:   { bg:"#2E7D32", light:"#E8F5E9", alt:"#D0EBD1" },
+  2:   { bg:"#F57F17", light:"#FFF8E1", alt:"#FDEFC3" },
+  3:   { bg:"#6A1B9A", light:"#F3E5F5", alt:"#E4C8EE" },
+  4:   { bg:"#00695C", light:"#E0F2F1", alt:"#B2DFDB" },
+  99:  { bg:"#546E7A", light:"#FAFAFA", alt:"#EFEFEF" },
 };
+function gc(group) { return GROUP_COLORS[String(group)] || GROUP_COLORS[99]; }
 
 function buildExcel(processed) {
   const wb = XLSX.utils.book_new();
@@ -212,18 +216,31 @@ function buildExcel(processed) {
   ];
   XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
 
-  // 시트2: 품목별 합계
+  // 시트2: 품목별 합계 (수량없는 항목 맨 위 별도)
   const codeMap = {};
+  const noQtyMap = {};
   processed.forEach((item) => {
     if (!item.code) return;
-    if (!codeMap[item.code]) codeMap[item.code] = { group:item.group, sortNum:item.sortNum, qty:0 };
-    const q = item.total != null ? item.total : (item.row[4] != null ? Number(item.row[4]) : 0);
-    codeMap[item.code].qty += q;
+    if (item.noQty) {
+      // 수량 미확인 항목
+      if (!noQtyMap[item.code]) noQtyMap[item.code] = { group: item.group, sortNum: item.sortNum };
+    } else {
+      if (!codeMap[item.code]) codeMap[item.code] = { group: item.group, sortNum: item.sortNum, qty: 0 };
+      const q = item.total != null ? item.total : (item.row[4] != null ? Number(item.row[4]) : 0);
+      codeMap[item.code].qty += q;
+    }
   });
+  const ws2Data = [["품목코드","발주수량(합계)"]];
+  // 수량 미확인 먼저
+  const noQtyEntries = Object.entries(noQtyMap).sort(([,a],[,b]) => a.group - b.group || a.sortNum - b.sortNum);
+  if (noQtyEntries.length > 0) {
+    ws2Data.push(["⚠ 수량 미확인 — 직접 확인 필요"]);
+    noQtyEntries.forEach(([code]) => ws2Data.push([code, "확인필요"]));
+  }
+  // 일반 합계
   const summaryRows = Object.entries(codeMap)
     .sort(([,a],[,b]) => a.group - b.group || a.sortNum - b.sortNum);
-  const ws2Data = [["품목코드","발주수량(합계)"]];
-  let curG2 = -1;
+  let curG2 = -999;
   summaryRows.forEach(([code, s]) => {
     if (s.group !== curG2) { curG2 = s.group; ws2Data.push([`▶ ${GROUP_LABELS[s.group]}`]); }
     ws2Data.push([code, s.qty]);
@@ -327,7 +344,9 @@ export default function App() {
           const eVal = row[4];
           const eNum = eVal != null && eVal !== "" ? Number(eVal) : null;
           const total = eNum != null && packQty != null ? eNum * packQty : null;
-          result.push({ group, sortNum, code, master:match?.mc||null, method, packQty, total, row:[...row] });
+          // 수량 없는 항목은 그룹 -1 (맨 위)
+          const noQty = eNum == null;
+          result.push({ group: noQty ? -1 : group, sortNum, code, master:match?.mc||null, method, packQty, total, noQty, row:[...row] });
         });
         result.sort((a, b) => a.group - b.group || a.sortNum - b.sortNum);
         const matched = result.filter((x) => x.master).length;
@@ -464,13 +483,13 @@ export default function App() {
                         if (item.group !== cg) {
                           cg = item.group;
                           rows.push(
-                            <tr key={`g${idx}`} className="group-hdr" style={{ background: GROUP_COLORS[item.group].bg }}>
+                            <tr key={`g${idx}`} className="group-hdr" style={{ background: gc(item.group).bg }}>
                               <td colSpan={7}>▶ {GROUP_LABELS[item.group]}</td>
                             </tr>
                           );
                         }
                         rn++;
-                        const col = GROUP_COLORS[item.group];
+                        const col = gc(item.group);
                         rows.push(
                           <tr key={idx} style={{ background: rn%2===0 ? col.alt : col.light }}>
                             <td className="td-num">{rn}</td>
@@ -503,34 +522,46 @@ export default function App() {
                   <tbody>
                     {(() => {
                       const codeMap = {};
+                      const noQtyMap = {};
                       processed.forEach((item) => {
                         if (!item.code) return;
-                        if (!codeMap[item.code]) codeMap[item.code] = { group:item.group, sortNum:item.sortNum, qty:0 };
-                        const q = item.total!=null ? item.total : (item.row[4]!=null ? Number(item.row[4]) : 0);
-                        codeMap[item.code].qty += q;
+                        if (item.noQty) {
+                          if (!noQtyMap[item.code]) noQtyMap[item.code] = { group: item.group, sortNum: item.sortNum };
+                        } else {
+                          if (!codeMap[item.code]) codeMap[item.code] = { group:item.group, sortNum:item.sortNum, qty:0 };
+                          const q = item.total!=null ? item.total : (item.row[4]!=null ? Number(item.row[4]) : 0);
+                          codeMap[item.code].qty += q;
+                        }
                       });
-                      const sorted = Object.entries(codeMap)
-                        .sort(([,a],[,b]) => a.group-b.group || a.sortNum-b.sortNum);
-                      let cg2=-1, ri=0;
-                      return sorted.map(([code, s]) => {
-                        const rows = [];
+                      const noQtyEntries = Object.entries(noQtyMap).sort(([,a],[,b]) => a.group-b.group||a.sortNum-b.sortNum);
+                      const sorted = Object.entries(codeMap).sort(([,a],[,b]) => a.group-b.group||a.sortNum-b.sortNum);
+                      const rows = [];
+                      // 수량 미확인 먼저
+                      if (noQtyEntries.length > 0) {
+                        rows.push(<tr key="noqty-hdr" className="group-hdr" style={{background:"#B71C1C"}}><td colSpan={2}>⚠ 수량 미확인 — 직접 확인 필요</td></tr>);
+                        noQtyEntries.forEach(([code], i) => rows.push(
+                          <tr key={`nq${code}`} style={{background: i%2===0?"#FFEBEE":"#FFCDD2"}}>
+                            <td className="td-code">{code}</td>
+                            <td className="td-center" style={{color:"#B71C1C",fontWeight:700}}>확인필요</td>
+                          </tr>
+                        ));
+                      }
+                      // 일반 합계
+                      let cg2=-999, ri=0;
+                      sorted.forEach(([code, s]) => {
                         if (s.group !== cg2) {
                           cg2 = s.group;
-                          rows.push(
-                            <tr key={`sg${code}`} className="group-hdr" style={{ background: GROUP_COLORS[s.group].bg }}>
-                              <td colSpan={2}>▶ {GROUP_LABELS[s.group]}</td>
-                            </tr>
-                          );
+                          rows.push(<tr key={`sg${code}`} className="group-hdr" style={{background:gc(s.group)?.bg||"#546E7A"}}><td colSpan={2}>▶ {GROUP_LABELS[s.group]}</td></tr>);
                         }
                         ri++;
                         rows.push(
-                          <tr key={code} style={{ background: ri%2===0 ? GROUP_COLORS[s.group].alt : GROUP_COLORS[s.group].light }}>
+                          <tr key={code} style={{background:ri%2===0?gc(s.group)?.alt:gc(s.group)?.light}}>
                             <td className="td-code">{code}</td>
                             <td className="td-center bold">{s.qty}</td>
                           </tr>
                         );
-                        return rows;
                       });
+                      return rows;
                     })()}
                   </tbody>
                 </table>
