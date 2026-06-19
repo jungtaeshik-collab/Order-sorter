@@ -394,7 +394,7 @@ export default function App() {
             <div className="step-icon">📂</div>
             <h2>발주 파일 업로드</h2>
             <p className="desc">쿠팡에서 받은 발주 엑셀을 올려주세요</p>
-            {masterError && <div className="error-msg">{masterError}</div>}
+            {masterError && !masterLoaded && <div className="error-msg">{masterError}</div>}
             {!masterLoaded ? (
               <div className="no-master">
                 마스터가 없어요.<br />
