@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
+import { BUILTIN_MASTER } from "./masterData";
 import * as XLSX from "xlsx";
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, set, get } from "firebase/database";
@@ -73,6 +74,7 @@ function findRankExact(name, index) {
   return null;
 }
 function findRankFuzzy(name, masterCodes) {
+  // 일반 normalize 매칭
   const nameN = normalize(name);
   let best = null;
   const seen = new Set();
@@ -93,7 +95,22 @@ function findRankFuzzy(name, masterCodes) {
       if (found) break;
     }
   });
-  return best;
+  if (best) return best;
+  // 한글 포함 품목: 원본 문자열 기준 5~8글자 일치
+  const nameRaw = name.replace(/[\s\(\)\[\]]/g, "");
+  for (let l = Math.min(8, nameRaw.length); l >= 5; l--) {
+    for (let s = 0; s <= nameRaw.length - l; s++) {
+      const sub = nameRaw.slice(s, s + l);
+      if (!/[가-힣]/.test(sub)) continue; // 한글 포함된 것만
+      for (let i = 0; i < masterCodes.length; i++) {
+        const mcRaw = masterCodes[i].replace(/[\s\(\)\[\]]/g, "");
+        if (mcRaw.includes(sub)) {
+          return { rank: i, mc: masterCodes[i], len: l };
+        }
+      }
+    }
+  }
+  return null;
 }
 function getCodeFromSku(name) {
   if (!name) return null;
@@ -116,11 +133,14 @@ function getGroup(code) {
   if (prefix === "K") return 4;
   return 99;
 }
-function getSortNum(code) {
-  if (!code) return 999999;
-  const m = code.match(/^[A-Za-z]+?(\d+)/);
-  return m ? parseInt(m[1], 10) : 999999;
+function getSortKey(code) {
+  // 숫자 + 뒤 알파벳까지 포함 (K1000B < K1000BK < K1000W)
+  if (!code) return [999999, ""];
+  const m = code.match(/^[A-Za-z]+?(\d+)([A-Za-z]*)/);
+  return m ? [parseInt(m[1], 10), m[2]] : [999999, ""];
 }
+function getSortNum(code) { return getSortKey(code)[0]; }
+function getSortSuffix(code) { return getSortKey(code)[1]; }
 function extractPackQty(name) {
   if (!name) return null;
   let m = name.match(/\((\d+)개입\)/);
@@ -281,10 +301,16 @@ export default function App() {
         setMasterLoaded(true);
         setMasterMeta({ count: codes.length, updatedAt: data.updatedAt });
       } else {
-        setMasterError("마스터가 없어요. 우측 상단에서 업로드해주세요.");
+        // Firebase에 없으면 내장 마스터 사용
+        setMasterCodes(BUILTIN_MASTER);
+        setMasterLoaded(true);
+        setMasterMeta({ count: BUILTIN_MASTER.length, updatedAt: "기본내장" });
       }
     } catch (e) {
-      setMasterError("마스터 로드 실패: " + e.message);
+      // 오류 시에도 내장 마스터로 폴백
+      setMasterCodes(BUILTIN_MASTER);
+      setMasterLoaded(true);
+      setMasterMeta({ count: BUILTIN_MASTER.length, updatedAt: "기본내장" });
     }
     setLoading(false);
     setStep("ready");
@@ -346,9 +372,10 @@ export default function App() {
           const total = eNum != null && packQty != null ? eNum * packQty : null;
           // 수량 없는 항목은 그룹 -1 (맨 위)
           const noQty = eNum == null;
-          result.push({ group: noQty ? -1 : group, sortNum, code, master:match?.mc||null, method, packQty, total, noQty, row:[...row] });
+          const sortSuffix = getSortSuffix(code);
+          result.push({ group: noQty ? -1 : group, sortNum, sortSuffix, code, master:match?.mc||null, method, packQty, total, noQty, row:[...row] });
         });
-        result.sort((a, b) => a.group - b.group || a.sortNum - b.sortNum);
+        result.sort((a, b) => a.group - b.group || a.sortNum - b.sortNum || a.sortSuffix.localeCompare(b.sortSuffix));
         const matched = result.filter((x) => x.master).length;
         setStats({ total:result.length, matched, unmatched:result.length - matched });
         setProcessed(result);
