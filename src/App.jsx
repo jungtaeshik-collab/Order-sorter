@@ -2,23 +2,18 @@ import React, { useState, useCallback } from "react";
 import * as XLSX from "xlsx";
 import "./App.css";
 
-// ── 마스터 품목 리스트 (플로엠리스.xlsx 내용 — 업데이트 시 이 배열만 교체) ──
-// 실제 배포 시: public/master.xlsx 파일을 fetch해서 로드
-// 개발 편의상 아래 MASTER_URL 방식 사용
 const MASTER_URL = "/master.xlsx";
 
-// ── 유틸 함수 ──
+// ── 정규화: 하이픈/공백/괄호 제거 후 대문자 ──
 function normalize(s) {
   return s.replace(/[-_\s()[\]]/g, "").toUpperCase();
 }
 
 function extractTokens(s) {
   const tokens = [];
-  // 영문1-4자 + 숫자 시작 코드
   const re1 = /[A-Za-z]{1,4}[\d][\w\-.]*/g;
   let m;
   while ((m = re1.exec(s)) !== null) tokens.push(m[0]);
-  // V-08 스타일
   const re2 = /[A-Za-z]+-\d+/g;
   while ((m = re2.exec(s)) !== null) tokens.push(m[0]);
   return tokens;
@@ -37,7 +32,6 @@ function masterVariants(mc) {
 
 function skuVariants(name) {
   const vars = [];
-  // Pack_코드
   const packRe = /Pack_([A-Za-z]{1,4}[\d][\w\-.]*)/g;
   let m;
   while ((m = packRe.exec(name)) !== null) {
@@ -95,16 +89,22 @@ function findRankFuzzy(name, masterCodes) {
   return best;
 }
 
+// ── 코드 추출: K-0400 → K0400, K-1000-W → K1000W 정규화 ──
 function getCodeFromSku(name) {
   if (!name) return null;
   const packM = name.match(/Pack_([A-Za-z]{1,4}[\d][\w\-.]*)/);
-  if (packM) return packM[1];
+  if (packM) return normalize(packM[1]);
+  // 영문+하이픈+숫자 패턴도 잡기 (K-0400, T-2008)
+  const hyM = name.match(/\b([A-Za-z]{1,4})-(\d[\w\-]*)/);
+  if (hyM) return normalize(hyM[1] + hyM[2]);
   const codes = name.match(/[A-Za-z]{1,4}[\d][\w\-.]*/g);
-  return codes ? codes[0] : null;
+  return codes ? normalize(codes[0]) : null;
 }
 
+// ── 그룹 판별: normalize된 코드 기준 ──
 function getGroup(code) {
   if (!code) return 99;
+  // normalize 후 앞 영문 접두사
   const p = code.match(/^([A-Za-z]+)/);
   if (!p) return 99;
   const prefix = p[1].toUpperCase();
@@ -115,6 +115,7 @@ function getGroup(code) {
   return 99;
 }
 
+// ── 정렬 숫자: normalize된 코드에서 첫 숫자 블록 ──
 function getSortNum(code) {
   if (!code) return 999999;
   const m = code.match(/^[A-Za-z]+?(\d+)/);
@@ -132,7 +133,6 @@ function extractPackQty(name) {
   return null;
 }
 
-// 쌍 행 병합 (V1907 등 발주수량이 다음 행에 있는 케이스)
 function mergeRows(raw) {
   const skip = new Set();
   const result = [];
@@ -158,13 +158,8 @@ function mergeRows(raw) {
 }
 
 const GROUP_LABELS = {
-  0: "F 시리즈",
-  1: "L 시리즈",
-  2: "V 시리즈",
-  3: "FL 시리즈",
-  99: "기타",
+  0: "F 시리즈", 1: "L 시리즈", 2: "V 시리즈", 3: "FL 시리즈", 99: "기타",
 };
-
 const GROUP_COLORS = {
   0: { bg: "#1565C0", light: "#E3F0FF", alt: "#CCE0FF" },
   1: { bg: "#2E7D32", light: "#E8F5E9", alt: "#D0EBD1" },
@@ -173,21 +168,19 @@ const GROUP_COLORS = {
   99: { bg: "#546E7A", light: "#FAFAFA", alt: "#EFEFEF" },
 };
 
-// ── 엑셀 생성 ──
+// ── 엑셀 생성 (시트1: 정렬결과 / 시트2: 품목별 합계) ──
 function buildExcel(processed) {
   const wb = XLSX.utils.book_new();
+
+  // ── 시트1: 정렬결과 ──
   const wsData = [];
-
-  // 헤더
   wsData.push([
-    "브랜드", "SKU ID", "SKU 이름", "품목코드", "SKU Barcode",
-    "발주수량", "개입수", "합계수량", "확정수량", "입고수량",
-    "매입가", "총발주 매입금", "발주번호", "발주유형", "발주현황",
-    "물류센터", "입고예정일", "발주일", "매입유형", "면세여부",
-    "생산연도", "제조일자", "유통(소비)기한", "공급가", "부가세",
-    "입고금액", "Xdock",
+    "브랜드","SKU ID","SKU 이름","품목코드","SKU Barcode",
+    "발주수량","개입수","합계수량","확정수량","입고수량",
+    "매입가","총발주 매입금","발주번호","발주유형","발주현황",
+    "물류센터","입고예정일","발주일","매입유형","면세여부",
+    "생산연도","제조일자","유통(소비)기한","공급가","부가세","입고금액","Xdock",
   ]);
-
   let curGroup = -1;
   processed.forEach((item) => {
     if (item.group !== curGroup) {
@@ -197,24 +190,55 @@ function buildExcel(processed) {
     }
     const r = item.row;
     wsData.push([
-      r[0], r[1], r[2], item.code, r[3], r[4],
-      item.packQty, item.total,
-      r[5], r[6], r[7], r[8], r[9], r[10], r[11],
-      r[12], r[13], r[14], r[15], r[16], r[17], r[18],
-      r[19], r[20], r[21], r[22], r[23],
+      r[0],r[1],r[2],item.code,r[3],r[4],
+      item.packQty,item.total,
+      r[5],r[6],r[7],r[8],r[9],r[10],r[11],
+      r[12],r[13],r[14],r[15],r[16],r[17],r[18],
+      r[19],r[20],r[21],r[22],r[23],
     ]);
   });
-
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-  ws["!cols"] = [
-    { wch: 14 }, { wch: 12 }, { wch: 50 }, { wch: 14 }, { wch: 16 },
-    { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 8 },
-    { wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 12 },
-    { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 8 },
-    { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 8 }, { wch: 8 },
-    { wch: 10 }, { wch: 8 },
+  const ws1 = XLSX.utils.aoa_to_sheet(wsData);
+  ws1["!cols"] = [
+    {wch:14},{wch:12},{wch:50},{wch:14},{wch:16},
+    {wch:8},{wch:8},{wch:10},{wch:8},{wch:8},
+    {wch:10},{wch:14},{wch:12},{wch:8},{wch:12},
+    {wch:8},{wch:12},{wch:12},{wch:8},{wch:8},
+    {wch:10},{wch:10},{wch:12},{wch:8},{wch:8},{wch:10},{wch:8},
   ];
-  XLSX.utils.book_append_sheet(wb, ws, "정렬결과");
+  XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
+
+  // ── 시트2: 품목별 합계 (같은 품목코드 묶어서) ──
+  const codeMap = {};
+  processed.forEach((item) => {
+    if (!item.code) return;
+    const key = item.code;
+    if (!codeMap[key]) {
+      codeMap[key] = { code: key, group: item.group, sortNum: item.sortNum, totalQty: 0, rows: [] };
+    }
+    const qty = item.total != null ? item.total
+               : (item.row[4] != null ? Number(item.row[4]) : 0);
+    codeMap[key].totalQty += qty;
+    codeMap[key].rows.push(item);
+  });
+
+  const summaryRows = Object.values(codeMap).sort(
+    (a, b) => a.group - b.group || a.sortNum - b.sortNum
+  );
+
+  const ws2Data = [["품목코드", "발주수량(합계)"]];
+  let curG2 = -1;
+  summaryRows.forEach((s) => {
+    if (s.group !== curG2) {
+      curG2 = s.group;
+      ws2Data.push([`▶ ${GROUP_LABELS[s.group]}`]);
+    }
+    ws2Data.push([s.code, s.totalQty]);
+  });
+
+  const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
+  ws2["!cols"] = [{wch:18},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
+
   XLSX.writeFile(wb, "발주정렬결과.xlsx");
 }
 
@@ -227,12 +251,10 @@ export default function App() {
   const [processed, setProcessed] = useState(null);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1); // 1=마스터로드 2=발주업로드 3=결과
+  const [step, setStep] = useState(1);
 
-  // 마스터 로드 (public/master.xlsx)
   const loadMaster = useCallback(async () => {
-    setLoading(true);
-    setMasterError(null);
+    setLoading(true); setMasterError(null);
     try {
       const res = await fetch(MASTER_URL);
       if (!res.ok) throw new Error("master.xlsx 파일을 찾을 수 없어요");
@@ -240,22 +262,14 @@ export default function App() {
       const wb = XLSX.read(buf, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
-      const codes = rows.slice(1)
-        .map((r) => (r[0] != null ? String(r[0]).trim() : ""))
-        .filter(Boolean);
-      setMasterCodes(codes);
-      setMasterLoaded(true);
-      setStep(2);
-    } catch (e) {
-      setMasterError(e.message);
-    }
+      const codes = rows.slice(1).map((r) => (r[0] != null ? String(r[0]).trim() : "")).filter(Boolean);
+      setMasterCodes(codes); setMasterLoaded(true); setStep(2);
+    } catch (e) { setMasterError(e.message); }
     setLoading(false);
   }, []);
 
-  // 마스터 파일 직접 업로드 (로컬 테스트용)
   const handleMasterUpload = useCallback((e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files[0]; if (!file) return;
     setLoading(true);
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -263,27 +277,17 @@ export default function App() {
         const wb = XLSX.read(ev.target.result, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
-        const codes = rows.slice(1)
-          .map((r) => (r[0] != null ? String(r[0]).trim() : ""))
-          .filter(Boolean);
-        setMasterCodes(codes);
-        setMasterLoaded(true);
-        setStep(2);
-      } catch (err) {
-        setMasterError("파일 읽기 실패: " + err.message);
-      }
+        const codes = rows.slice(1).map((r) => (r[0] != null ? String(r[0]).trim() : "")).filter(Boolean);
+        setMasterCodes(codes); setMasterLoaded(true); setStep(2);
+      } catch (err) { setMasterError("파일 읽기 실패: " + err.message); }
       setLoading(false);
     };
     reader.readAsArrayBuffer(file);
   }, []);
 
-  // 발주 파일 처리
   const handleOrderFile = useCallback((e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setOrderFile(file.name);
-    setLoading(true);
-
+    const file = e.target.files[0]; if (!file) return;
+    setOrderFile(file.name); setLoading(true);
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -291,23 +295,16 @@ export default function App() {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
         const raw = allRows.slice(1);
-
         const merged = mergeRows(raw);
         const index = buildMasterIndex(masterCodes);
-
         const result = [];
         merged.forEach((row) => {
           const nameRaw = row[2];
           const nameStr = nameRaw != null ? String(nameRaw).trim() : "";
           if (!nameStr || /^\d+$/.test(nameStr)) return;
-
           let match = findRankExact(nameStr, index);
           let method = "코드";
-          if (!match) {
-            const fuzzy = findRankFuzzy(nameStr, masterCodes);
-            if (fuzzy) { match = fuzzy; method = "유사"; }
-          }
-
+          if (!match) { const f = findRankFuzzy(nameStr, masterCodes); if (f) { match = f; method = "유사"; } }
           const code = getCodeFromSku(nameStr);
           const group = getGroup(code);
           const sortNum = getSortNum(code);
@@ -315,38 +312,20 @@ export default function App() {
           const eVal = row[4];
           const eNum = eVal != null && eVal !== "" ? Number(eVal) : null;
           const total = eNum != null && packQty != null ? eNum * packQty : null;
-
-          result.push({
-            group, sortNum, code,
-            master: match?.mc || null,
-            method,
-            packQty, total,
-            row: [...row],
-          });
+          result.push({ group, sortNum, code, master: match?.mc || null, method, packQty, total, row: [...row] });
         });
-
         result.sort((a, b) => a.group - b.group || a.sortNum - b.sortNum);
-
         const matched = result.filter((x) => x.master).length;
         setStats({ total: result.length, matched, unmatched: result.length - matched });
-        setProcessed(result);
-        setStep(3);
-      } catch (err) {
-        alert("파일 처리 오류: " + err.message);
-      }
+        setProcessed(result); setStep(3);
+      } catch (err) { alert("파일 처리 오류: " + err.message); }
       setLoading(false);
     };
     reader.readAsArrayBuffer(file);
   }, [masterCodes]);
 
   const handleDownload = () => buildExcel(processed);
-
-  const handleReset = () => {
-    setOrderFile(null);
-    setProcessed(null);
-    setStats(null);
-    setStep(2);
-  };
+  const handleReset = () => { setOrderFile(null); setProcessed(null); setStats(null); setStep(2); };
 
   return (
     <div className="app">
@@ -357,123 +336,79 @@ export default function App() {
             <span className="logo-text">플로엠 발주 정렬기</span>
           </div>
           {masterLoaded && (
-            <div className="master-badge">
-              ✓ 마스터 {masterCodes.length.toLocaleString()}개 로드됨
-            </div>
+            <div className="master-badge">✓ 마스터 {masterCodes.length.toLocaleString()}개 로드됨</div>
           )}
         </div>
       </header>
 
       <main className="main">
-        {/* STEP 1: 마스터 로드 */}
         {step === 1 && (
           <div className="card center-card">
             <div className="step-icon">📋</div>
             <h2>시작하기</h2>
             <p className="desc">먼저 품목 마스터를 불러와야 해요</p>
-
             <button className="btn-primary" onClick={loadMaster} disabled={loading}>
               {loading ? "로딩 중…" : "마스터 자동 로드 (플로엠리스.xlsx)"}
             </button>
-
             <div className="divider"><span>또는</span></div>
-
             <label className="btn-secondary file-label">
               마스터 파일 직접 선택
               <input type="file" accept=".xlsx" onChange={handleMasterUpload} hidden />
             </label>
-
             {masterError && <div className="error-msg">⚠ {masterError}</div>}
           </div>
         )}
 
-        {/* STEP 2: 발주 파일 업로드 */}
         {step === 2 && (
           <div className="card center-card">
             <div className="step-icon">📂</div>
             <h2>발주 파일 업로드</h2>
             <p className="desc">쿠팡에서 받은 발주 엑셀 파일을 올려주세요</p>
-
             <label className="upload-zone">
               <input type="file" accept=".xlsx,.xls" onChange={handleOrderFile} hidden />
               <div className="upload-icon">⬆</div>
-              <div className="upload-text">
-                {loading ? "처리 중…" : "파일을 클릭하거나 끌어다 놓으세요"}
-              </div>
+              <div className="upload-text">{loading ? "처리 중…" : "파일을 클릭하거나 끌어다 놓으세요"}</div>
               <div className="upload-sub">.xlsx / .xls</div>
             </label>
-
-            <button className="btn-ghost" onClick={() => { setMasterLoaded(false); setStep(1); }}>
-              ← 마스터 다시 로드
-            </button>
+            <button className="btn-ghost" onClick={() => { setMasterLoaded(false); setStep(1); }}>← 마스터 다시 로드</button>
           </div>
         )}
 
-        {/* STEP 3: 결과 */}
         {step === 3 && processed && (
           <div className="result-wrap">
-            {/* 통계 카드 */}
             <div className="stats-row">
-              <div className="stat-card">
-                <div className="stat-num">{stats.total}</div>
-                <div className="stat-label">전체 품목</div>
-              </div>
-              <div className="stat-card matched">
-                <div className="stat-num">{stats.matched}</div>
-                <div className="stat-label">매칭 완료</div>
-              </div>
-              <div className="stat-card unmatched">
-                <div className="stat-num">{stats.unmatched}</div>
-                <div className="stat-label">미매칭</div>
-              </div>
+              <div className="stat-card"><div className="stat-num">{stats.total}</div><div className="stat-label">전체 품목</div></div>
+              <div className="stat-card matched"><div className="stat-num">{stats.matched}</div><div className="stat-label">매칭 완료</div></div>
+              <div className="stat-card unmatched"><div className="stat-num">{stats.unmatched}</div><div className="stat-label">미매칭</div></div>
             </div>
-
-            {/* 액션 버튼 */}
             <div className="action-row">
-              <button className="btn-download" onClick={handleDownload}>
-                ⬇ 엑셀 다운로드
-              </button>
-              <button className="btn-ghost" onClick={handleReset}>
-                새 파일 처리
-              </button>
+              <button className="btn-download" onClick={handleDownload}>⬇ 엑셀 다운로드 (2시트)</button>
+              <button className="btn-ghost" onClick={handleReset}>새 파일 처리</button>
             </div>
-
-            {/* 미리보기 테이블 */}
             <div className="preview">
-              <div className="preview-header">미리보기</div>
+              <div className="preview-header">미리보기 — 정렬결과</div>
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>품목코드</th>
-                      <th>SKU 이름</th>
-                      <th>발주수량</th>
-                      <th>개입수</th>
-                      <th>합계</th>
-                      <th>매칭</th>
-                    </tr>
+                    <tr><th>#</th><th>품목코드</th><th>SKU 이름</th><th>발주수량</th><th>개입수</th><th>합계</th><th>매칭</th></tr>
                   </thead>
                   <tbody>
                     {(() => {
-                      let curGroup = -1;
-                      let rowNum = 0;
+                      let curGroup = -1; let rowNum = 0;
                       return processed.map((item, idx) => {
                         const rows = [];
                         if (item.group !== curGroup) {
                           curGroup = item.group;
-                          const col = GROUP_COLORS[item.group];
                           rows.push(
-                            <tr key={`g${idx}`} className="group-hdr" style={{ background: col.bg }}>
+                            <tr key={`g${idx}`} className="group-hdr" style={{ background: GROUP_COLORS[item.group].bg }}>
                               <td colSpan={7}>▶ {GROUP_LABELS[item.group]}</td>
                             </tr>
                           );
                         }
                         rowNum++;
                         const col = GROUP_COLORS[item.group];
-                        const bg = rowNum % 2 === 0 ? col.alt : col.light;
                         rows.push(
-                          <tr key={idx} style={{ background: bg }}>
+                          <tr key={idx} style={{ background: rowNum % 2 === 0 ? col.alt : col.light }}>
                             <td className="td-num">{rowNum}</td>
                             <td className="td-code">{item.code || "—"}</td>
                             <td className="td-name">{String(item.row[2] || "")}</td>
@@ -481,10 +416,45 @@ export default function App() {
                             <td className="td-center">{item.packQty ?? "—"}</td>
                             <td className="td-center bold">{item.total ?? "—"}</td>
                             <td className="td-center">
-                              <span className={item.master ? "badge-ok" : "badge-ng"}>
-                                {item.master ? "✓" : "✗"}
-                              </span>
+                              <span className={item.master ? "badge-ok" : "badge-ng"}>{item.master ? "✓" : "✗"}</span>
                             </td>
+                          </tr>
+                        );
+                        return rows;
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 시트2 미리보기 */}
+            <div className="preview">
+              <div className="preview-header">미리보기 — 품목별 합계 (시트2)</div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>품목코드</th><th>발주수량 합계</th></tr></thead>
+                  <tbody>
+                    {(() => {
+                      const codeMap = {};
+                      processed.forEach((item) => {
+                        if (!item.code) return;
+                        if (!codeMap[item.code]) codeMap[item.code] = { group: item.group, sortNum: item.sortNum, qty: 0 };
+                        const q = item.total != null ? item.total : (item.row[4] != null ? Number(item.row[4]) : 0);
+                        codeMap[item.code].qty += q;
+                      });
+                      const sorted = Object.entries(codeMap).sort(([,a],[,b]) => a.group - b.group || a.sortNum - b.sortNum);
+                      let cg = -1;
+                      return sorted.map(([code, s], i) => {
+                        const rows = [];
+                        if (s.group !== cg) {
+                          cg = s.group;
+                          rows.push(<tr key={`sg${i}`} className="group-hdr" style={{ background: GROUP_COLORS[s.group].bg }}><td colSpan={2}>▶ {GROUP_LABELS[s.group]}</td></tr>);
+                        }
+                        rows.push(
+                          <tr key={i} style={{ background: i % 2 === 0 ? GROUP_COLORS[s.group].light : GROUP_COLORS[s.group].alt }}>
+                            <td className="td-code">{code}</td>
+                            <td className="td-center bold">{s.qty}</td>
                           </tr>
                         );
                         return rows;
