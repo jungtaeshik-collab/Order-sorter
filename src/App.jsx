@@ -402,12 +402,23 @@ export default function App() {
                 플로엠리스.xlsx를 먼저 올려주세요.
               </div>
             ) : (
-              <label className="upload-zone">
-                <input type="file" accept=".xlsx,.xls" onChange={handleOrderFile} hidden />
+              <div
+                className="upload-zone"
+                onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("drag-over"); }}
+                onDragLeave={(e) => { e.currentTarget.classList.remove("drag-over"); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.classList.remove("drag-over");
+                  const file = e.dataTransfer.files[0];
+                  if (file) handleOrderFile({ target: { files: [file], value: "" } });
+                }}
+                onClick={() => document.getElementById("order-file-input").click()}
+              >
+                <input id="order-file-input" type="file" accept=".xlsx,.xls" onChange={handleOrderFile} hidden />
                 <div className="upload-icon">⬆</div>
                 <div className="upload-text">{loading ? "처리 중…" : "파일을 클릭하거나 끌어다 놓으세요"}</div>
                 <div className="upload-sub">.xlsx / .xls</div>
-              </label>
+              </div>
             )}
           </div>
         )}
