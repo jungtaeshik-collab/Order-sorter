@@ -1,23 +1,8 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { BUILTIN_MASTER } from "./masterData";
 import * as XLSX from "xlsx";
-import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, get } from "firebase/database";
 import "./App.css";
 
-// ── Firebase 설정 ──
-const firebaseConfig = {
-  apiKey: "AIzaSyAIJBHt3j73Ustm1BIxA8329yzFS2j1uMM",
-  authDomain: "petit-subcon.firebaseapp.com",
-  databaseURL: "https://petit-subcon-default-rtdb.firebaseio.com",
-  projectId: "petit-subcon",
-  storageBucket: "petit-subcon.firebasestorage.app",
-  messagingSenderId: "1089448725745",
-  appId: "1:1089448725745:web:63769e226cb991a3f4ad50",
-};
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getDatabase(firebaseApp);
-const MASTER_PATH = "order-sorter/master";
 
 // ── 유틸 함수 ──
 function normalize(s) {
@@ -186,15 +171,6 @@ function parseMasterXlsx(arrayBuffer) {
     .filter(Boolean);
 }
 
-// ── codes 배열 → base64 (DB 저장용) ──
-function codesToBase64(codes) {
-  const json = JSON.stringify(codes);
-  return btoa(unescape(encodeURIComponent(json)));
-}
-function base64ToCodes(b64) {
-  const json = decodeURIComponent(escape(atob(b64)));
-  return JSON.parse(json);
-}
 
 const GROUP_LABELS = { "-1":"⚠ 수량 미확인", 0:"F 시리즈", 1:"L 시리즈", 2:"V 시리즈", 3:"FL 시리즈", 4:"K 시리즈", 99:"기타" };
 const GROUP_COLORS = {
@@ -293,29 +269,10 @@ export default function App() {
     loadMasterFromDB();
   }, []);
 
-  async function loadMasterFromDB() {
-    setLoading(true);
-    setMasterError(null);
-    try {
-      const snap = await get(ref(db, MASTER_PATH));
-      if (snap.exists()) {
-        const data = snap.val();
-        const codes = base64ToCodes(data.codes);
-        setMasterCodes(codes);
-        setMasterLoaded(true);
-        setMasterMeta({ count: codes.length, updatedAt: data.updatedAt });
-      } else {
-        // Firebase에 없으면 내장 마스터 사용
-        setMasterCodes(BUILTIN_MASTER);
-        setMasterLoaded(true);
-        setMasterMeta({ count: BUILTIN_MASTER.length, updatedAt: "기본내장" });
-      }
-    } catch (e) {
-      // 오류 시에도 내장 마스터로 폴백
-      setMasterCodes(BUILTIN_MASTER);
-      setMasterLoaded(true);
-      setMasterMeta({ count: BUILTIN_MASTER.length, updatedAt: "기본내장" });
-    }
+  function loadMasterFromDB() {
+    setMasterCodes(BUILTIN_MASTER);
+    setMasterLoaded(true);
+    setMasterMeta({ count: BUILTIN_MASTER.length, updatedAt: "내장" });
     setLoading(false);
     setStep("ready");
   }
@@ -331,15 +288,10 @@ export default function App() {
       const codes = parseMasterXlsx(buf);
       if (codes.length === 0) throw new Error("품목 코드를 찾을 수 없어요");
       const now = new Date().toLocaleString("ko-KR");
-      await set(ref(db, MASTER_PATH), {
-        codes: codesToBase64(codes),
-        count: codes.length,
-        updatedAt: now,
-      });
       setMasterCodes(codes);
       setMasterLoaded(true);
       setMasterMeta({ count: codes.length, updatedAt: now });
-      setUploadMsg({ type:"ok", text:`✓ 마스터 업데이트 완료 — ${codes.length.toLocaleString()}개 품목 (${now})` });
+      setUploadMsg({ type:"ok", text:`✓ 임시 적용 ${codes.length.toLocaleString()}개 — 영구 저장은 masterData.js 교체` });
     } catch (err) {
       setUploadMsg({ type:"err", text:"업로드 실패: " + err.message });
     }
@@ -606,23 +558,8 @@ export default function App() {
             </div>;
 import { BUILTIN_MASTER } from "./masterData";
 import * as XLSX from "xlsx";
-import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, get } from "firebase/database";
 import "./App.css";
 
-// ── Firebase 설정 ──
-const firebaseConfig = {
-  apiKey: "AIzaSyAIJBHt3j73Ustm1BIxA8329yzFS2j1uMM",
-  authDomain: "petit-subcon.firebaseapp.com",
-  databaseURL: "https://petit-subcon-default-rtdb.firebaseio.com",
-  projectId: "petit-subcon",
-  storageBucket: "petit-subcon.firebasestorage.app",
-  messagingSenderId: "1089448725745",
-  appId: "1:1089448725745:web:63769e226cb991a3f4ad50",
-};
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getDatabase(firebaseApp);
-const MASTER_PATH = "order-sorter/master";
 
 // ── 유틸 함수 ──
 function normalize(s) {
@@ -791,15 +728,6 @@ function parseMasterXlsx(arrayBuffer) {
     .filter(Boolean);
 }
 
-// ── codes 배열 → base64 (DB 저장용) ──
-function codesToBase64(codes) {
-  const json = JSON.stringify(codes);
-  return btoa(unescape(encodeURIComponent(json)));
-}
-function base64ToCodes(b64) {
-  const json = decodeURIComponent(escape(atob(b64)));
-  return JSON.parse(json);
-}
 
 const GROUP_LABELS = { "-1":"⚠ 수량 미확인", 0:"F 시리즈", 1:"L 시리즈", 2:"V 시리즈", 3:"FL 시리즈", 4:"K 시리즈", 99:"기타" };
 const GROUP_COLORS = {
@@ -898,29 +826,10 @@ export default function App() {
     loadMasterFromDB();
   }, []);
 
-  async function loadMasterFromDB() {
-    setLoading(true);
-    setMasterError(null);
-    try {
-      const snap = await get(ref(db, MASTER_PATH));
-      if (snap.exists()) {
-        const data = snap.val();
-        const codes = base64ToCodes(data.codes);
-        setMasterCodes(codes);
-        setMasterLoaded(true);
-        setMasterMeta({ count: codes.length, updatedAt: data.updatedAt });
-      } else {
-        // Firebase에 없으면 내장 마스터 사용
-        setMasterCodes(BUILTIN_MASTER);
-        setMasterLoaded(true);
-        setMasterMeta({ count: BUILTIN_MASTER.length, updatedAt: "기본내장" });
-      }
-    } catch (e) {
-      // 오류 시에도 내장 마스터로 폴백
-      setMasterCodes(BUILTIN_MASTER);
-      setMasterLoaded(true);
-      setMasterMeta({ count: BUILTIN_MASTER.length, updatedAt: "기본내장" });
-    }
+  function loadMasterFromDB() {
+    setMasterCodes(BUILTIN_MASTER);
+    setMasterLoaded(true);
+    setMasterMeta({ count: BUILTIN_MASTER.length, updatedAt: "내장" });
     setLoading(false);
     setStep("ready");
   }
@@ -936,15 +845,10 @@ export default function App() {
       const codes = parseMasterXlsx(buf);
       if (codes.length === 0) throw new Error("품목 코드를 찾을 수 없어요");
       const now = new Date().toLocaleString("ko-KR");
-      await set(ref(db, MASTER_PATH), {
-        codes: codesToBase64(codes),
-        count: codes.length,
-        updatedAt: now,
-      });
       setMasterCodes(codes);
       setMasterLoaded(true);
       setMasterMeta({ count: codes.length, updatedAt: now });
-      setUploadMsg({ type:"ok", text:`✓ 마스터 업데이트 완료 — ${codes.length.toLocaleString()}개 품목 (${now})` });
+      setUploadMsg({ type:"ok", text:`✓ 임시 적용 ${codes.length.toLocaleString()}개 — 영구 저장은 masterData.js 교체` });
     } catch (err) {
       setUploadMsg({ type:"err", text:"업로드 실패: " + err.message });
     }
