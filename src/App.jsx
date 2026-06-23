@@ -380,7 +380,7 @@ export default function App() {
         <div className="header-inner">
           <div className="logo">
             <span className="logo-mark">F</span>
-            <span className="logo-text">플로엠 발주 정렬기</span>
+            <span className="logo-text">플로엠제품 품목별합계</span>
           </div>
           <div className="header-right">
             {masterLoaded && masterMeta && (
