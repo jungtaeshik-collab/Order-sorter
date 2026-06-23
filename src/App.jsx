@@ -172,6 +172,14 @@ function parseMasterXlsx(arrayBuffer) {
 }
 
 
+// SKU ID → 마스터 품목명 직접 매핑
+const SKU_ID_MAP = {
+  "59366013": "아크릴 홀더 1단",
+  "59366014": "아크릴 홀더 1단",
+  "64312192": "아크릴 홀더 검정 1단",
+  "64312193": "아크릴 홀더 흰색 1단",
+};
+
 const GROUP_LABELS = { "-1":"⚠ 수량 미확인", 0:"F 시리즈", 1:"L 시리즈", 2:"V 시리즈", 3:"FL 시리즈", 4:"K 시리즈", 99:"기타" };
 const GROUP_COLORS = {
   "-1":{ bg:"#B71C1C", light:"#FFEBEE", alt:"#FFCDD2" },
@@ -218,7 +226,7 @@ function buildExcel(processed) {
   const noQtyMap = {};
   processed.forEach((item) => {
     // 코드 없는 한글품목은 SKU이름을 키로 사용
-    const key = item.code || String(item.row[2] || "").trim();
+    const key = item.displayName || item.code || String(item.row[2] || "").trim();
     if (!key) return;
     if (item.noQty) {
       if (!noQtyMap[key]) noQtyMap[key] = { group: item.group, sortNum: item.sortNum, count: 0 };
@@ -316,10 +324,19 @@ export default function App() {
         merged.forEach((row) => {
           const nameStr = row[2] != null ? String(row[2]).trim() : "";
           if (!nameStr || /^\d+$/.test(nameStr)) return;
+          // SKU ID 직접 매핑 먼저 체크
+          const skuId = row[1] != null ? String(row[1]).trim() : "";
+          const skuIdMapped = SKU_ID_MAP[skuId] || null;
+
           let match = findRankExact(nameStr, index);
           let method = "코드";
           if (!match) { const f = findRankFuzzy(nameStr, masterCodes); if (f) { match = f; method = "유사"; } }
-          const code = getCodeFromSku(nameStr);
+          // SKU ID 매핑이 있으면 마스터에서 해당 품목 찾기
+          if (skuIdMapped) {
+            const mappedIdx = masterCodes.indexOf(skuIdMapped);
+            if (mappedIdx >= 0) { match = { rank: mappedIdx, mc: skuIdMapped }; method = "SKUID"; }
+          }
+          const code = skuIdMapped ? null : getCodeFromSku(nameStr);
           const group = getGroup(code);
           const sortNum = getSortNum(code);
           const packQty = extractPackQty(nameStr);
@@ -332,7 +349,9 @@ export default function App() {
           const sortSuffix = getSortSuffix(code);
           // 한글 품목처럼 코드가 없으면 마스터 rank를 sortNum으로 사용
           const effectiveSortNum = (sortNum === 999999 && match) ? match.rank : sortNum;
-          result.push({ group: noQty ? -1 : group, sortNum: effectiveSortNum, sortSuffix, code, master:match?.mc||null, method, packQty, total, noQty, row:[...row] });
+          // 시트2 품목별합계 키: SKU ID 매핑명 우선
+          const displayName = skuIdMapped || null;
+          result.push({ group: noQty ? -1 : group, sortNum: effectiveSortNum, sortSuffix, code, displayName, master:match?.mc||null, method, packQty, total, noQty, row:[...row] });
         });
         result.sort((a, b) => a.group - b.group || a.sortNum - b.sortNum || a.sortSuffix.localeCompare(b.sortSuffix));
         const matched = result.filter((x) => x.master).length;
@@ -510,7 +529,7 @@ export default function App() {
                       const codeMap = {};
                       const noQtyMap = {};
                       processed.forEach((item) => {
-                        const key = item.code || String(item.row[2] || "").trim();
+                        const key = item.displayName || item.code || String(item.row[2] || "").trim();
                         if (!key) return;
                         if (item.noQty) {
                           if (!noQtyMap[key]) noQtyMap[key] = { group: item.group, sortNum: item.sortNum, count: 0 };
