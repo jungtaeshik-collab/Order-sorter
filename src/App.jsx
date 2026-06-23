@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { BUILTIN_MASTER } from "./masterData";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import "./App.css";
 
 
@@ -219,6 +219,23 @@ function buildExcel(processed) {
     {wch:8},{wch:8},{wch:10},{wch:14},{wch:12},{wch:8},{wch:12},{wch:8},
     {wch:12},{wch:12},{wch:8},{wch:8},{wch:10},{wch:10},{wch:12},{wch:8},{wch:8},{wch:10},{wch:8},
   ];
+  // 그룹 헤더행 노란색 음영
+  const yellowFill = { patternType: "solid", fgColor: { rgb: "FFE500" } };
+  const boldFont = { bold: true };
+  let wsRow = 1; // 0-indexed
+  wsData.forEach((row) => {
+    const cellAddr = XLSX.utils.encode_cell({ r: wsRow, c: 0 });
+    const firstVal = row[0] != null ? String(row[0]) : "";
+    if (firstVal.startsWith("▶")) {
+      // 헤더행 전체 열에 노란색 적용
+      for (let c = 0; c < 27; c++) {
+        const addr = XLSX.utils.encode_cell({ r: wsRow, c });
+        if (!ws1[addr]) ws1[addr] = { t: "s", v: c === 0 ? firstVal : "" };
+        ws1[addr].s = { fill: yellowFill, font: boldFont };
+      }
+    }
+    wsRow++;
+  });
   XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
 
   // 시트2: 품목별 합계 (수량없는 항목 맨 위 별도)
@@ -253,6 +270,11 @@ function buildExcel(processed) {
     if (s.group !== curG2) { curG2 = s.group; ws2Data.push([`▶ ${GROUP_LABELS[String(s.group)]}`, "", ""]); }
     ws2Data.push([key, s.qty, s.count]);
   });
+  // 총 합계 행 추가
+  const totalCount = Object.values(codeMap).reduce((s, v) => s + v.count, 0);
+  const totalQty = Object.values(codeMap).reduce((s, v) => s + v.qty, 0);
+  ws2Data.push(["▶ 합계", totalQty, totalCount]);
+
   const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
   ws2["!cols"] = [{wch:30},{wch:16},{wch:8}];
   XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
@@ -380,7 +402,7 @@ export default function App() {
         <div className="header-inner">
           <div className="logo">
             <span className="logo-mark">F</span>
-            <span className="logo-text">플로엠제품 품목별합계</span>
+            <span className="logo-text">플로엠제품 자동정렬 합계</span>
           </div>
           <div className="header-right">
             {masterLoaded && masterMeta && (
