@@ -1,12 +1,13 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { BUILTIN_MASTER } from "./masterData";
+import { BUILTIN_MASTER_PETIT } from "./masterDataPetit";
 import * as XLSX from "xlsx-js-style";
 import "./App.css";
 
-
-// ── 유틸 함수 ──
+// ══════════════════════════════════════════════
+// ── 공통 유틸 ──
+// ══════════════════════════════════════════════
 function normalize(s) {
-  // 하이픈/공백/괄호/한글 제거 → 영숫자만
   return s.replace(/[-_\s()[\]]/g, "").replace(/[가-힣]/g, "").toUpperCase();
 }
 function extractTokens(s) {
@@ -60,7 +61,6 @@ function findRankExact(name, index) {
   return null;
 }
 function findRankFuzzy(name, masterCodes) {
-  // 일반 normalize 매칭
   const nameN = normalize(name);
   let best = null;
   const seen = new Set();
@@ -82,51 +82,19 @@ function findRankFuzzy(name, masterCodes) {
     }
   });
   if (best) return best;
-  // 한글 포함 품목: 원본 문자열 기준 5~8글자 일치
-  const nameRaw = name.replace(/[\s\(\)\[\]]/g, "");
+  const nameRaw = name.replace(/[\s()[\]]/g, "");
   for (let l = Math.min(8, nameRaw.length); l >= 5; l--) {
     for (let s = 0; s <= nameRaw.length - l; s++) {
       const sub = nameRaw.slice(s, s + l);
-      if (!/[가-힣]/.test(sub)) continue; // 한글 포함된 것만
+      if (!/[가-힣]/.test(sub)) continue;
       for (let i = 0; i < masterCodes.length; i++) {
-        const mcRaw = masterCodes[i].replace(/[\s\(\)\[\]]/g, "");
-        if (mcRaw.includes(sub)) {
-          return { rank: i, mc: masterCodes[i], len: l };
-        }
+        const mcRaw = masterCodes[i].replace(/[\s()[\]]/g, "");
+        if (mcRaw.includes(sub)) return { rank: i, mc: masterCodes[i], len: l };
       }
     }
   }
   return null;
 }
-function getCodeFromSku(name) {
-  if (!name) return null;
-  const packM = name.match(/Pack_([A-Za-z]{1,4}[\d][\w\-.]*)/);
-  if (packM) return normalize(packM[1]);
-  const hyM = name.match(/\b([A-Za-z]{1,4})-(\d[\w\-]*)/);
-  if (hyM) return normalize(hyM[1] + hyM[2]);
-  const codes = name.match(/[A-Za-z]{1,4}[\d][\w\-.]*/g);
-  return codes ? normalize(codes[0]) : null;
-}
-function getGroup(code) {
-  if (!code) return 99;
-  const p = code.match(/^([A-Za-z]+)/);
-  if (!p) return 99;
-  const prefix = p[1].toUpperCase();
-  if (prefix === "FL") return 3;
-  if (prefix === "F") return 0;
-  if (prefix === "L") return 1;
-  if (prefix === "V") return 2;
-  if (prefix === "K") return 4;
-  return 99;
-}
-function getSortKey(code) {
-  // 숫자 + 뒤 알파벳까지 포함 (K1000B < K1000BK < K1000W)
-  if (!code) return [999999, ""];
-  const m = code.match(/^[A-Za-z]+?(\d+)([A-Za-z]*)/);
-  return m ? [parseInt(m[1], 10), m[2]] : [999999, ""];
-}
-function getSortNum(code) { return getSortKey(code)[0]; }
-function getSortSuffix(code) { return getSortKey(code)[1]; }
 function extractPackQty(name) {
   if (!name) return null;
   let m = name.match(/\((\d+)개입\)/);
@@ -160,19 +128,16 @@ function mergeRows(raw) {
   }
   return result;
 }
-
-// ── xlsx → codes 배열 변환 ──
 function parseMasterXlsx(arrayBuffer) {
   const wb = XLSX.read(arrayBuffer, { type: "array" });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
-  return rows.slice(1)
-    .map((r) => (r[0] != null ? String(r[0]).trim() : ""))
-    .filter(Boolean);
+  return rows.slice(1).map((r) => (r[0] != null ? String(r[0]).trim() : "")).filter(Boolean);
 }
 
-
-// SKU ID → 마스터 품목명 직접 매핑
+// ══════════════════════════════════════════════
+// ── 플로엠 정렬 로직 ──
+// ══════════════════════════════════════════════
 const SKU_ID_MAP = {
   "59366013": "아크릴 홀더 1단",
   "59366014": "아크릴 홀더 1단",
@@ -180,19 +145,219 @@ const SKU_ID_MAP = {
   "64312193": "아크릴 홀더 흰색 1단",
 };
 
-const GROUP_LABELS = { "-1":"⚠ 수량 미확인", 0:"F 시리즈", 1:"L 시리즈", 2:"V 시리즈", 3:"FL 시리즈", 4:"K 시리즈", 99:"기타" };
-const GROUP_COLORS = {
-  "-1":{ bg:"#B71C1C", light:"#FFEBEE", alt:"#FFCDD2" },
-  0:   { bg:"#1565C0", light:"#E3F0FF", alt:"#CCE0FF" },
-  1:   { bg:"#2E7D32", light:"#E8F5E9", alt:"#D0EBD1" },
-  2:   { bg:"#F57F17", light:"#FFF8E1", alt:"#FDEFC3" },
-  3:   { bg:"#6A1B9A", light:"#F3E5F5", alt:"#E4C8EE" },
-  4:   { bg:"#00695C", light:"#E0F2F1", alt:"#B2DFDB" },
-  99:  { bg:"#546E7A", light:"#FAFAFA", alt:"#EFEFEF" },
-};
-function gc(group) { return GROUP_COLORS[String(group)] || GROUP_COLORS[99]; }
+function getFloemCode(name) {
+  if (!name) return null;
+  const packM = name.match(/Pack_([A-Za-z]{1,4}[\d][\w\-.]*)/);
+  if (packM) return normalize(packM[1]);
+  const hyM = name.match(/\b([A-Za-z]{1,4})-(\d[\w\-]*)/);
+  if (hyM) return normalize(hyM[1] + hyM[2]);
+  const codes = name.match(/[A-Za-z]{1,4}[\d][\w\-.]*/g);
+  return codes ? normalize(codes[0]) : null;
+}
+function getFloemGroup(code) {
+  if (!code) return 99;
+  const p = code.match(/^([A-Za-z]+)/);
+  if (!p) return 99;
+  const prefix = p[1].toUpperCase();
+  if (prefix === "FL") return 3;
+  if (prefix === "F") return 0;
+  if (prefix === "L") return 1;
+  if (prefix === "V") return 2;
+  if (prefix === "K") return 4;
+  return 99;
+}
+function getFloemSortKey(code) {
+  if (!code) return [999999, ""];
+  const m = code.match(/^[A-Za-z]+?(\d+)([A-Za-z]*)/);
+  return m ? [parseInt(m[1], 10), m[2]] : [999999, ""];
+}
 
-function buildExcel(processed) {
+const FLOEM_GROUP_LABELS = {
+  "-1": "⚠ 수량 미확인", 0: "F 시리즈", 1: "L 시리즈",
+  2: "V 시리즈", 3: "FL 시리즈", 4: "K 시리즈", 99: "기타",
+};
+const FLOEM_GROUP_COLORS = {
+  "-1": { bg: "#B71C1C", light: "#FFEBEE", alt: "#FFCDD2" },
+  0:   { bg: "#1565C0", light: "#E3F0FF", alt: "#CCE0FF" },
+  1:   { bg: "#2E7D32", light: "#E8F5E9", alt: "#D0EBD1" },
+  2:   { bg: "#F57F17", light: "#FFF8E1", alt: "#FDEFC3" },
+  3:   { bg: "#6A1B9A", light: "#F3E5F5", alt: "#E4C8EE" },
+  4:   { bg: "#00695C", light: "#E0F2F1", alt: "#B2DFDB" },
+  99:  { bg: "#546E7A", light: "#FAFAFA", alt: "#EFEFEF" },
+};
+function fgc(group) { return FLOEM_GROUP_COLORS[String(group)] || FLOEM_GROUP_COLORS[99]; }
+
+function processFloem(merged, masterCodes) {
+  const index = buildMasterIndex(masterCodes);
+  const result = [];
+  merged.forEach((row) => {
+    const nameStr = row[2] != null ? String(row[2]).trim() : "";
+    if (!nameStr || /^\d+$/.test(nameStr)) return;
+    const skuId = row[1] != null ? String(row[1]).trim() : "";
+    const skuIdMapped = SKU_ID_MAP[skuId] || null;
+    let match = findRankExact(nameStr, index);
+    let method = "코드";
+    if (!match) { const f = findRankFuzzy(nameStr, masterCodes); if (f) { match = f; method = "유사"; } }
+    if (skuIdMapped) {
+      const mappedIdx = masterCodes.indexOf(skuIdMapped);
+      if (mappedIdx >= 0) { match = { rank: mappedIdx, mc: skuIdMapped }; method = "SKUID"; }
+    }
+    const code = skuIdMapped ? null : getFloemCode(nameStr);
+    const group = getFloemGroup(code);
+    const [sortNum, sortSuffix] = getFloemSortKey(code);
+    const packQty = extractPackQty(nameStr);
+    const eVal = row[4];
+    const eNum = eVal != null && eVal !== "" ? Number(eVal) : null;
+    const total = eNum != null && packQty != null ? eNum * packQty : null;
+    const noQty = eNum == null || packQty == null;
+    const effectiveSortNum = (sortNum === 999999 && match) ? match.rank : sortNum;
+    const displayName = skuIdMapped || null;
+    result.push({ group: noQty ? -1 : group, sortNum: effectiveSortNum, sortSuffix, code, displayName, master: match?.mc || null, method, packQty, total, noQty, row: [...row] });
+  });
+  result.sort((a, b) => a.group - b.group || a.sortNum - b.sortNum || a.sortSuffix.localeCompare(b.sortSuffix));
+  return result;
+}
+
+// ══════════════════════════════════════════════
+// ── 쁘띠팬시 정렬 로직 ──
+// ══════════════════════════════════════════════
+
+// 색상 정규화 (영문코드 우선)
+const COLOR_ALIAS = {
+  "219R": ["219R","219적색","219RED","219R"],
+  "B": ["B","청색","블루","BLUE","BL"],
+  "A": ["A","혼합","MIX","ASSORT"],
+  "W": ["W","흰색","WHITE","화이트"],
+  "R": ["R","적색","RED","빨강"],
+  "G": ["G","녹색","GREEN","초록"],
+  "Y": ["Y","황색","YELLOW","노랑"],
+  "K": ["K","흑색","BLACK","검정","블랙"],
+};
+function normalizeColor(str) {
+  const s = str.toUpperCase().replace(/[\s_-]/g,"");
+  for (const [canon, aliases] of Object.entries(COLOR_ALIAS)) {
+    if (aliases.some(a => s.includes(a.toUpperCase().replace(/[\s_-]/g,"")))) return canon;
+  }
+  return s;
+}
+
+// 쁘띠 카테고리 판별
+function getPetitCategory(code, name) {
+  if (!code && !name) return "기타";
+  const c = (code || "").toUpperCase().replace(/_/g,"");
+  const n = (name || "").toUpperCase();
+  if (c.startsWith("DA") || c.startsWith("PD") || c.startsWith("TS")) return "스티커";
+  if (c.startsWith("20") || c.startsWith("OPM") || c.startsWith("DT") || c.startsWith("HR")) return "견출지";
+  if (n.includes("스티커") || n.includes("STICKER")) return "스티커";
+  if (n.includes("견출") || n.includes("인덱스")) return "견출지";
+  return "기타";
+}
+
+// 스티커 그룹
+function getPetitStickerGroup(code) {
+  if (!code) return 99;
+  const c = code.toUpperCase().replace(/_/g,"");
+  if (c.startsWith("DA")) return 0;
+  if (c.startsWith("PD")) return 1;
+  if (c.startsWith("TS")) return 2;
+  return 99;
+}
+// 견출지 그룹
+function getPetitLabelGroup(code) {
+  if (!code) return 99;
+  const c = code.toUpperCase().replace(/_/g,"");
+  if (c.startsWith("20")) return 0;
+  if (c.startsWith("OPM")) return 1;
+  if (c.startsWith("DT")) return 2;
+  if (c.startsWith("HR")) return 3;
+  return 4;
+}
+// 기타 그룹
+function getPetitEtcGroup(name) {
+  const n = (name||"").replace(/\s/g,"");
+  if (/만년스[탬템]프/.test(n)) return 0;
+  if (/스[탬템]프/.test(n)) return 1;
+  if (/패드/.test(n)) return 2;
+  if (/명찰/.test(n)) return 3;
+  return 4;
+}
+
+function getPetitCode(name) {
+  if (!name) return null;
+  // 언더바 무시하고 코드 추출
+  const n = name.replace(/_/g,"");
+  const packM = n.match(/Pack_?([A-Za-z]{1,4}[\d][\w\-.]*)/i);
+  if (packM) return packM[1].toUpperCase();
+  const hyM = n.match(/\b([A-Za-z]{1,4})-(\d[\w\-]*)/);
+  if (hyM) return (hyM[1]+hyM[2]).toUpperCase();
+  const codes = n.match(/[A-Za-z]{1,4}[\d][\w\-.]*/g);
+  return codes ? codes[0].toUpperCase() : null;
+}
+
+function getPetitSortNum(code) {
+  if (!code) return 999999;
+  const m = code.replace(/_/g,"").match(/[A-Za-z]*(\d+)/);
+  return m ? parseInt(m[1], 10) : 999999;
+}
+
+function processPetit(merged, masterCodes) {
+  const index = buildMasterIndex(masterCodes);
+  const result = [];
+  merged.forEach((row) => {
+    const nameStr = row[2] != null ? String(row[2]).trim() : "";
+    if (!nameStr || /^\d+$/.test(nameStr)) return;
+    const skuId = row[1] != null ? Number(row[1]) : 0;
+    const code = getPetitCode(nameStr);
+    const category = getPetitCategory(code, nameStr);
+    let catGroup, subGroup;
+    if (category === "스티커") {
+      catGroup = 0;
+      subGroup = getPetitStickerGroup(code);
+    } else if (category === "견출지") {
+      catGroup = 1;
+      subGroup = getPetitLabelGroup(code);
+    } else {
+      catGroup = 2;
+      subGroup = getPetitEtcGroup(nameStr);
+    }
+    const sortNum = getPetitSortNum(code);
+    let match = findRankExact(nameStr, index);
+    if (!match) { const f = findRankFuzzy(nameStr, masterCodes); if (f) match = f; }
+    const packQty = extractPackQty(nameStr);
+    const eVal = row[4];
+    const eNum = eVal != null && eVal !== "" ? Number(eVal) : null;
+    const total = eNum != null && packQty != null ? eNum * packQty : null;
+    const noQty = eNum == null || packQty == null;
+    result.push({ catGroup, subGroup, sortNum, skuId, code, master: match?.mc || null, packQty, total, noQty, row: [...row] });
+  });
+  // 정렬: 카테고리 → 서브그룹 → 숫자 → SKU ID 오름차순
+  result.sort((a, b) => {
+    if (a.noQty !== b.noQty) return a.noQty ? -1 : 1; // 수량없는 건 맨 위
+    return a.catGroup - b.catGroup || a.subGroup - b.subGroup || a.sortNum - b.sortNum || a.skuId - b.skuId;
+  });
+  return result;
+}
+
+const PETIT_CAT_LABELS = { 0: "쁘띠스티커", 1: "쁘띠견출지", 2: "쁘띠기타" };
+const PETIT_STICKER_LABELS = { 0: "DA", 1: "PD", 2: "TS", 99: "기타" };
+const PETIT_LABEL_LABELS = { 0: "20-", 1: "OPM", 2: "DT", 3: "HR", 4: "기타" };
+const PETIT_ETC_LABELS = { 0: "만년스템프/스탬프", 1: "스탬프/스템프", 2: "패드", 3: "명찰", 4: "기타" };
+const PETIT_CAT_COLORS = {
+  0: { bg: "#AD1457", light: "#FCE4EC", alt: "#F8BBD9" },
+  1: { bg: "#1565C0", light: "#E3F0FF", alt: "#CCE0FF" },
+  2: { bg: "#2E7D32", light: "#E8F5E9", alt: "#D0EBD1" },
+};
+function pgc(catGroup) { return PETIT_CAT_COLORS[catGroup] || PETIT_CAT_COLORS[2]; }
+function getPetitGroupLabel(item) {
+  if (item.catGroup === 0) return PETIT_STICKER_LABELS[item.subGroup] || "기타";
+  if (item.catGroup === 1) return PETIT_LABEL_LABELS[item.subGroup] || "기타";
+  return PETIT_ETC_LABELS[item.subGroup] || "기타";
+}
+
+// ══════════════════════════════════════════════
+// ── 엑셀 생성 ──
+// ══════════════════════════════════════════════
+function buildFloemExcel(processed) {
   const wb = XLSX.utils.book_new();
   const wsData = [[
     "브랜드","SKU ID","SKU 이름","품목코드","SKU Barcode",
@@ -206,7 +371,7 @@ function buildExcel(processed) {
     if (item.group !== curGroup) {
       curGroup = item.group;
       const cnt = processed.filter((x) => x.group === item.group).length;
-      wsData.push([`▶  ${GROUP_LABELS[item.group]} — 숫자 오름차순  (${cnt}개)`]);
+      wsData.push([`▶  ${FLOEM_GROUP_LABELS[String(item.group)]} — 숫자 오름차순  (${cnt}개)`]);
     }
     const r = item.row;
     wsData.push([r[0],r[1],r[2],item.code,r[3],r[4],item.packQty,item.total,
@@ -219,121 +384,186 @@ function buildExcel(processed) {
     {wch:8},{wch:8},{wch:10},{wch:14},{wch:12},{wch:8},{wch:12},{wch:8},
     {wch:12},{wch:12},{wch:8},{wch:8},{wch:10},{wch:10},{wch:12},{wch:8},{wch:8},{wch:10},{wch:8},
   ];
-  // 그룹 헤더행 노란색 음영
-  const yellowFill = { patternType: "solid", fgColor: { rgb: "FFE500" } };
-  const boldFont = { bold: true };
-  let wsRow = 1; // 0-indexed
-  wsData.forEach((row) => {
-    const cellAddr = XLSX.utils.encode_cell({ r: wsRow, c: 0 });
-    const firstVal = row[0] != null ? String(row[0]) : "";
-    if (firstVal.includes("숫자 오름차순")) {
-      // 그룹 헤더행 전체 열에 노란색 적용
+  // 그룹 헤더행 노란색
+  const yellowFill = { patternType:"solid", fgColor:{ rgb:"FFE500" } };
+  const boldFont = { bold:true };
+  wsData.forEach((row, wsRow) => {
+    const v = row[0] != null ? String(row[0]) : "";
+    if (v.includes("숫자 오름차순")) {
       for (let c = 0; c < 27; c++) {
         const addr = XLSX.utils.encode_cell({ r: wsRow, c });
-        if (!ws1[addr]) ws1[addr] = { t: "s", v: c === 0 ? firstVal : "" };
-        ws1[addr].s = { fill: yellowFill, font: boldFont };
+        if (!ws1[addr]) ws1[addr] = { t:"s", v: c===0 ? v : "" };
+        ws1[addr].s = { fill:yellowFill, font:boldFont };
       }
     }
-    wsRow++;
   });
   XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
 
-  // 시트2: 품목별 합계 (수량없는 항목 맨 위 별도)
-  const codeMap = {};
-  const noQtyMap = {};
+  // 시트2
+  const codeMap = {}, noQtyMap = {};
   processed.forEach((item) => {
-    // 코드 없는 한글품목은 SKU이름을 키로 사용
-    const key = item.displayName || item.code || String(item.row[2] || "").trim();
+    const key = item.displayName || item.code || String(item.row[2]||"").trim();
     if (!key) return;
     if (item.noQty) {
-      if (!noQtyMap[key]) noQtyMap[key] = { group: item.group, sortNum: item.sortNum, count: 0 };
+      if (!noQtyMap[key]) noQtyMap[key] = { group:item.group, sortNum:item.sortNum, count:0 };
       noQtyMap[key].count += 1;
     } else {
-      if (!codeMap[key]) codeMap[key] = { group: item.group, sortNum: item.sortNum, qty: 0, count: 0 };
-      const q = item.total != null ? item.total : (item.row[4] != null ? Number(item.row[4]) : 0);
+      if (!codeMap[key]) codeMap[key] = { group:item.group, sortNum:item.sortNum, qty:0, count:0 };
+      const q = item.total!=null ? item.total : (item.row[4]!=null ? Number(item.row[4]) : 0);
       codeMap[key].qty += q;
       codeMap[key].count += 1;
     }
   });
   const ws2Data = [["품목코드","발주수량(합계)","행수"]];
-  // 수량 미확인 먼저
-  const noQtyEntries = Object.entries(noQtyMap).sort(([,a],[,b]) => a.group - b.group || a.sortNum - b.sortNum);
+  const noQtyEntries = Object.entries(noQtyMap).sort(([,a],[,b]) => a.group-b.group||a.sortNum-b.sortNum);
   if (noQtyEntries.length > 0) {
-    ws2Data.push(["⚠ 수량 미확인 — 직접 확인 필요", "", ""]);
-    noQtyEntries.forEach(([key, s]) => ws2Data.push([key, "확인필요", s.count]));
+    ws2Data.push(["⚠ 수량 미확인 — 직접 확인 필요","",""]);
+    noQtyEntries.forEach(([key,s]) => ws2Data.push([key,"확인필요",s.count]));
   }
-  // 일반 합계
-  const summaryRows = Object.entries(codeMap)
-    .sort(([,a],[,b]) => a.group - b.group || a.sortNum - b.sortNum);
+  const summaryRows = Object.entries(codeMap).sort(([,a],[,b]) => a.group-b.group||a.sortNum-b.sortNum);
   let curG2 = -999;
-  summaryRows.forEach(([key, s]) => {
-    if (s.group !== curG2) { curG2 = s.group; ws2Data.push([`▶ ${GROUP_LABELS[String(s.group)]}`, "", ""]); }
-    ws2Data.push([key, s.qty, s.count]);
+  summaryRows.forEach(([key,s]) => {
+    if (s.group!==curG2) { curG2=s.group; ws2Data.push([`▶ ${FLOEM_GROUP_LABELS[String(s.group)]}`,"",""]); }
+    ws2Data.push([key,s.qty,s.count]);
   });
-  // 총 합계 행 추가 (수량 미확인 행수도 포함)
-  const totalCount = Object.values(codeMap).reduce((s, v) => s + v.count, 0)
-                   + Object.values(noQtyMap).reduce((s, v) => s + v.count, 0);
-  const totalQty = Object.values(codeMap).reduce((s, v) => s + v.qty, 0);
-  ws2Data.push(["▶ 합계", totalQty, totalCount]);
-
+  const totalCount = Object.values(codeMap).reduce((s,v)=>s+v.count,0)
+                   + Object.values(noQtyMap).reduce((s,v)=>s+v.count,0);
+  const totalQty = Object.values(codeMap).reduce((s,v)=>s+v.qty,0);
+  ws2Data.push(["▶ 합계",totalQty,totalCount]);
   const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
   ws2["!cols"] = [{wch:30},{wch:16},{wch:8}];
   XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
-  XLSX.writeFile(wb, "발주정렬결과.xlsx");
+  XLSX.writeFile(wb, "발주정렬결과_플로엠.xlsx");
 }
 
+function buildPetitExcel(processed) {
+  const wb = XLSX.utils.book_new();
+  const wsData = [[
+    "브랜드","SKU ID","SKU 이름","품목코드","SKU Barcode",
+    "발주수량","개입수","합계수량","확정수량","입고수량",
+    "매입가","총발주 매입금","발주번호","발주유형","발주현황",
+    "물류센터","입고예정일","발주일","매입유형","면세여부",
+    "생산연도","제조일자","유통(소비)기한","공급가","부가세","입고금액","Xdock",
+  ]];
+  let curCat = -1, curSub = -1;
+  processed.forEach((item) => {
+    if (item.noQty) return; // 수량없는건 따로
+    if (item.catGroup !== curCat || item.subGroup !== curSub) {
+      curCat = item.catGroup; curSub = item.subGroup;
+      const label = `▶  ${PETIT_CAT_LABELS[item.catGroup]} — ${getPetitGroupLabel(item)}`;
+      wsData.push([label]);
+    }
+    const r = item.row;
+    wsData.push([r[0],r[1],r[2],item.code,r[3],r[4],item.packQty,item.total,
+      r[5],r[6],r[7],r[8],r[9],r[10],r[11],r[12],r[13],r[14],
+      r[15],r[16],r[17],r[18],r[19],r[20],r[21],r[22],r[23]]);
+  });
+  // 수량없는 것 맨 뒤
+  const noQtyItems = processed.filter(x => x.noQty);
+  if (noQtyItems.length > 0) {
+    wsData.push(["⚠ 수량 미확인"]);
+    noQtyItems.forEach(item => {
+      const r = item.row;
+      wsData.push([r[0],r[1],r[2],item.code,r[3],r[4],item.packQty,item.total,
+        r[5],r[6],r[7],r[8],r[9],r[10],r[11],r[12],r[13],r[14],
+        r[15],r[16],r[17],r[18],r[19],r[20],r[21],r[22],r[23]]);
+    });
+  }
+  const ws1 = XLSX.utils.aoa_to_sheet(wsData);
+  ws1["!cols"] = [
+    {wch:14},{wch:12},{wch:50},{wch:14},{wch:16},{wch:8},{wch:8},{wch:10},
+    {wch:8},{wch:8},{wch:10},{wch:14},{wch:12},{wch:8},{wch:12},{wch:8},
+    {wch:12},{wch:12},{wch:8},{wch:8},{wch:10},{wch:10},{wch:12},{wch:8},{wch:8},{wch:10},{wch:8},
+  ];
+  const yellowFill = { patternType:"solid", fgColor:{ rgb:"FFE500" } };
+  wsData.forEach((row, wsRow) => {
+    const v = row[0] != null ? String(row[0]) : "";
+    if (v.startsWith("▶  쁘띠")) {
+      for (let c = 0; c < 27; c++) {
+        const addr = XLSX.utils.encode_cell({ r:wsRow, c });
+        if (!ws1[addr]) ws1[addr] = { t:"s", v: c===0?v:"" };
+        ws1[addr].s = { fill:yellowFill, font:{ bold:true } };
+      }
+    }
+  });
+  XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
+
+  // 시트2
+  const codeMap = {}, noQtyMap2 = {};
+  processed.forEach((item) => {
+    const key = item.code || String(item.row[2]||"").trim();
+    if (!key) return;
+    if (item.noQty) {
+      if (!noQtyMap2[key]) noQtyMap2[key] = { catGroup:item.catGroup, subGroup:item.subGroup, sortNum:item.sortNum, count:0 };
+      noQtyMap2[key].count += 1;
+    } else {
+      if (!codeMap[key]) codeMap[key] = { catGroup:item.catGroup, subGroup:item.subGroup, sortNum:item.sortNum, qty:0, count:0 };
+      const q = item.total!=null ? item.total : (item.row[4]!=null ? Number(item.row[4]) : 0);
+      codeMap[key].qty += q;
+      codeMap[key].count += 1;
+    }
+  });
+  const ws2Data = [["품목코드","발주수량(합계)","행수"]];
+  const noQtyE = Object.entries(noQtyMap2).sort(([,a],[,b])=>a.catGroup-b.catGroup||a.subGroup-b.subGroup||a.sortNum-b.sortNum);
+  if (noQtyE.length>0) {
+    ws2Data.push(["⚠ 수량 미확인","",""]);
+    noQtyE.forEach(([key,s])=>ws2Data.push([key,"확인필요",s.count]));
+  }
+  const sumRows = Object.entries(codeMap).sort(([,a],[,b])=>a.catGroup-b.catGroup||a.subGroup-b.subGroup||a.sortNum-b.sortNum);
+  let cc=-1, cs=-1;
+  sumRows.forEach(([key,s])=>{
+    if(s.catGroup!==cc||s.subGroup!==cs){cc=s.catGroup;cs=s.subGroup;ws2Data.push([`▶ ${PETIT_CAT_LABELS[s.catGroup]}`,``,``]);}
+    ws2Data.push([key,s.qty,s.count]);
+  });
+  const totalCount = Object.values(codeMap).reduce((s,v)=>s+v.count,0)+Object.values(noQtyMap2).reduce((s,v)=>s+v.count,0);
+  const totalQty = Object.values(codeMap).reduce((s,v)=>s+v.qty,0);
+  ws2Data.push(["▶ 합계",totalQty,totalCount]);
+  const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
+  ws2["!cols"] = [{wch:30},{wch:16},{wch:8}];
+  XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
+  XLSX.writeFile(wb, "발주정렬결과_쁘띠팬시.xlsx");
+}
+
+// ══════════════════════════════════════════════
 // ── 메인 앱 ──
+// ══════════════════════════════════════════════
 export default function App() {
-  const [masterCodes, setMasterCodes]   = useState(null);
+  const [brand, setBrand] = useState(null); // "floem" | "petit"
+  const [masterCodes, setMasterCodes] = useState(null);
   const [masterLoaded, setMasterLoaded] = useState(false);
-  const [masterMeta, setMasterMeta]     = useState(null); // {count, updatedAt}
-  const [masterError, setMasterError]   = useState(null);
-  const [processed, setProcessed]       = useState(null);
-  const [stats, setStats]               = useState(null);
-  const [loading, setLoading]           = useState(false);
-  const [uploading, setUploading]       = useState(false);
-  const [uploadMsg, setUploadMsg]       = useState(null);
-  const [step, setStep]                 = useState("loading");
+  const [masterMeta, setMasterMeta] = useState(null);
+  const [processed, setProcessed] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState(null);
+  const [step, setStep] = useState("brand"); // brand | ready | result
 
-  // ── 앱 시작 시 DB에서 마스터 자동 로드 ──
-  useEffect(() => {
-    loadMasterFromDB();
-  }, []);
-
-  function loadMasterFromDB() {
-    setMasterCodes(BUILTIN_MASTER);
+  function selectBrand(b) {
+    setBrand(b);
+    const codes = b === "floem" ? BUILTIN_MASTER : BUILTIN_MASTER_PETIT;
+    setMasterCodes(codes);
     setMasterLoaded(true);
-    setMasterMeta({ count: BUILTIN_MASTER.length, updatedAt: "내장" });
-    setLoading(false);
+    setMasterMeta({ count: codes.length });
     setStep("ready");
   }
 
-  // ── 마스터 xlsx 업로드 → DB 저장 ──
   const handleMasterUpload = useCallback(async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploading(true);
-    setUploadMsg(null);
+    const file = e.target.files[0]; if (!file) return;
+    setUploading(true); setUploadMsg(null);
     try {
       const buf = await file.arrayBuffer();
       const codes = parseMasterXlsx(buf);
       if (codes.length === 0) throw new Error("품목 코드를 찾을 수 없어요");
-      const now = new Date().toLocaleString("ko-KR");
       setMasterCodes(codes);
-      setMasterLoaded(true);
-      setMasterMeta({ count: codes.length, updatedAt: now });
-      setUploadMsg({ type:"ok", text:`✓ 임시 적용 ${codes.length.toLocaleString()}개 — 영구 저장은 masterData.js 교체` });
-    } catch (err) {
-      setUploadMsg({ type:"err", text:"업로드 실패: " + err.message });
-    }
-    setUploading(false);
-    e.target.value = "";
+      setMasterMeta({ count: codes.length, updatedAt: new Date().toLocaleString("ko-KR") });
+      setUploadMsg({ type:"ok", text:`✓ 임시 적용 ${codes.length.toLocaleString()}개` });
+    } catch (err) { setUploadMsg({ type:"err", text:"실패: "+err.message }); }
+    setUploading(false); e.target.value = "";
   }, []);
 
-  // ── 발주 파일 처리 ──
   const handleOrderFile = useCallback((e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files[0]; if (!file) return;
     setLoading(true);
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -342,96 +572,77 @@ export default function App() {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const allRows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null });
         const merged = mergeRows(allRows.slice(1));
-        const index = buildMasterIndex(masterCodes);
-        const result = [];
-        merged.forEach((row) => {
-          const nameStr = row[2] != null ? String(row[2]).trim() : "";
-          if (!nameStr || /^\d+$/.test(nameStr)) return;
-          // SKU ID 직접 매핑 먼저 체크
-          const skuId = row[1] != null ? String(row[1]).trim() : "";
-          const skuIdMapped = SKU_ID_MAP[skuId] || null;
-
-          let match = findRankExact(nameStr, index);
-          let method = "코드";
-          if (!match) { const f = findRankFuzzy(nameStr, masterCodes); if (f) { match = f; method = "유사"; } }
-          // SKU ID 매핑이 있으면 마스터에서 해당 품목 찾기
-          if (skuIdMapped) {
-            const mappedIdx = masterCodes.indexOf(skuIdMapped);
-            if (mappedIdx >= 0) { match = { rank: mappedIdx, mc: skuIdMapped }; method = "SKUID"; }
-          }
-          const code = skuIdMapped ? null : getCodeFromSku(nameStr);
-          const group = getGroup(code);
-          const sortNum = getSortNum(code);
-          const packQty = extractPackQty(nameStr);
-          const eVal = row[4];
-          const eNum = eVal != null && eVal !== "" ? Number(eVal) : null;
-          const total = eNum != null && packQty != null ? eNum * packQty : null;
-          // 수량 없는 항목은 그룹 -1 (맨 위)
-          // 발주수량 없거나 개입수 없으면 합계 불가 → 맨 위
-          const noQty = eNum == null || packQty == null;
-          const sortSuffix = getSortSuffix(code);
-          // 한글 품목처럼 코드가 없으면 마스터 rank를 sortNum으로 사용
-          const effectiveSortNum = (sortNum === 999999 && match) ? match.rank : sortNum;
-          // 시트2 품목별합계 키: SKU ID 매핑명 우선
-          const displayName = skuIdMapped || null;
-          result.push({ group: noQty ? -1 : group, sortNum: effectiveSortNum, sortSuffix, code, displayName, master:match?.mc||null, method, packQty, total, noQty, row:[...row] });
-        });
-        result.sort((a, b) => a.group - b.group || a.sortNum - b.sortNum || a.sortSuffix.localeCompare(b.sortSuffix));
-        const matched = result.filter((x) => x.master).length;
-        setStats({ total:result.length, matched, unmatched:result.length - matched });
+        const result = brand === "floem"
+          ? processFloem(merged, masterCodes)
+          : processPetit(merged, masterCodes);
+        const matched = result.filter(x => x.master).length;
+        setStats({ total:result.length, matched, unmatched:result.length-matched });
         setProcessed(result);
         setStep("result");
-      } catch (err) { alert("파일 처리 오류: " + err.message); }
+      } catch (err) { alert("오류: "+err.message); }
       setLoading(false);
     };
     reader.readAsArrayBuffer(file);
     e.target.value = "";
-  }, [masterCodes]);
+  }, [masterCodes, brand]);
 
   const handleReset = () => { setProcessed(null); setStats(null); setStep("ready"); };
+  const handleBrandReset = () => { setBrand(null); setProcessed(null); setStats(null); setMasterLoaded(false); setStep("brand"); };
 
-  // 토스트 자동 닫기
   useEffect(() => {
     if (!uploadMsg) return;
-    const t = setTimeout(() => setUploadMsg(null), 4000);
-    return () => clearTimeout(t);
+    const t = setTimeout(()=>setUploadMsg(null), 4000);
+    return ()=>clearTimeout(t);
   }, [uploadMsg]);
+
+  const gc = brand === "floem" ? fgc : pgc;
+  const GROUP_LABELS = brand === "floem" ? FLOEM_GROUP_LABELS : PETIT_CAT_LABELS;
 
   return (
     <div className="app">
       <header className="header">
         <div className="header-inner">
-          <div className="logo">
-            <span className="logo-mark">F</span>
-            <span className="logo-text">플로엠제품 자동정렬 합계</span>
+          <div className="logo" onClick={handleBrandReset} style={{cursor:"pointer"}}>
+            <span className="logo-mark">{brand === "petit" ? "P" : "F"}</span>
+            <span className="logo-text">
+              {brand === "petit" ? "쁘띠팬시 자동정렬 합계" : "플로엠제품 자동정렬 합계"}
+            </span>
           </div>
           <div className="header-right">
             {masterLoaded && masterMeta && (
-              <div className="master-badge">
-                ✓ 마스터 {masterMeta.count.toLocaleString()}개
-                {masterMeta.updatedAt && <span className="badge-date"> · {masterMeta.updatedAt}</span>}
-              </div>
+              <div className="master-badge">✓ 마스터 {masterMeta.count.toLocaleString()}개</div>
             )}
-            <label className={`btn-master-upload ${uploading ? "disabled" : ""}`}>
-              {uploading ? "업로드 중…" : "📋 마스터 업데이트"}
-              <input type="file" accept=".xlsx" onChange={handleMasterUpload} hidden disabled={uploading} />
-            </label>
+            {brand && (
+              <label className={`btn-master-upload ${uploading?"disabled":""}`}>
+                {uploading?"업로드 중…":"📋 마스터 업데이트"}
+                <input type="file" accept=".xlsx" onChange={handleMasterUpload} hidden disabled={uploading}/>
+              </label>
+            )}
           </div>
         </div>
       </header>
 
       {uploadMsg && (
-        <div className={`toast ${uploadMsg.type}`} onClick={() => setUploadMsg(null)}>
-          {uploadMsg.text}
-        </div>
+        <div className={`toast ${uploadMsg.type}`} onClick={()=>setUploadMsg(null)}>{uploadMsg.text}</div>
       )}
 
       <main className="main">
-        {/* 초기 로딩 */}
-        {step === "loading" && (
+        {/* 브랜드 선택 */}
+        {step === "brand" && (
           <div className="card center-card">
-            <div className="spinner" />
-            <p className="desc">마스터 품목 불러오는 중…</p>
+            <div className="step-icon">🏪</div>
+            <h2>브랜드 선택</h2>
+            <p className="desc">정렬할 브랜드를 선택해주세요</p>
+            <div style={{display:"flex",gap:16,width:"100%",marginTop:8}}>
+              <button className="btn-brand floem" onClick={()=>selectBrand("floem")}>
+                <span className="brand-icon">F</span>
+                <span>플로엠</span>
+              </button>
+              <button className="btn-brand petit" onClick={()=>selectBrand("petit")}>
+                <span className="brand-icon">P</span>
+                <span>쁘띠팬시</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -440,33 +651,24 @@ export default function App() {
           <div className="card center-card">
             <div className="step-icon">📂</div>
             <h2>발주 파일 업로드</h2>
-            <p className="desc">쿠팡에서 받은 발주 엑셀을 올려주세요</p>
-            {masterError && !masterLoaded && <div className="error-msg">{masterError}</div>}
-            {!masterLoaded ? (
-              <div className="no-master">
-                마스터가 없어요.<br />
-                우측 상단 <strong>📋 마스터 업데이트</strong> 버튼으로<br />
-                플로엠리스.xlsx를 먼저 올려주세요.
-              </div>
-            ) : (
-              <div
-                className="upload-zone"
-                onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("drag-over"); }}
-                onDragLeave={(e) => { e.currentTarget.classList.remove("drag-over"); }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.currentTarget.classList.remove("drag-over");
-                  const file = e.dataTransfer.files[0];
-                  if (file) handleOrderFile({ target: { files: [file], value: "" } });
-                }}
-                onClick={() => document.getElementById("order-file-input").click()}
-              >
-                <input id="order-file-input" type="file" accept=".xlsx,.xls" onChange={handleOrderFile} hidden />
-                <div className="upload-icon">⬆</div>
-                <div className="upload-text">{loading ? "처리 중…" : "파일을 클릭하거나 끌어다 놓으세요"}</div>
-                <div className="upload-sub">.xlsx / .xls</div>
-              </div>
-            )}
+            <p className="desc">쿠팡 발주 엑셀을 올려주세요</p>
+            <div
+              className="upload-zone"
+              onDragOver={(e)=>{e.preventDefault();e.currentTarget.classList.add("drag-over");}}
+              onDragLeave={(e)=>e.currentTarget.classList.remove("drag-over")}
+              onDrop={(e)=>{
+                e.preventDefault();e.currentTarget.classList.remove("drag-over");
+                const file=e.dataTransfer.files[0];
+                if(file) handleOrderFile({target:{files:[file],value:""}});
+              }}
+              onClick={()=>document.getElementById("order-file-input").click()}
+            >
+              <input id="order-file-input" type="file" accept=".xlsx,.xls" onChange={handleOrderFile} hidden/>
+              <div className="upload-icon">⬆</div>
+              <div className="upload-text">{loading?"처리 중…":"파일을 클릭하거나 끌어다 놓으세요"}</div>
+              <div className="upload-sub">.xlsx / .xls</div>
+            </div>
+            <button className="btn-ghost" onClick={handleBrandReset}>← 브랜드 다시 선택</button>
           </div>
         )}
 
@@ -474,125 +676,53 @@ export default function App() {
         {step === "result" && processed && (
           <div className="result-wrap">
             <div className="stats-row">
-              <div className="stat-card">
-                <div className="stat-num">{stats.total}</div>
-                <div className="stat-label">전체 품목</div>
-              </div>
-              <div className="stat-card matched">
-                <div className="stat-num">{stats.matched}</div>
-                <div className="stat-label">매칭 완료</div>
-              </div>
-              <div className="stat-card unmatched">
-                <div className="stat-num">{stats.unmatched}</div>
-                <div className="stat-label">미매칭</div>
-              </div>
+              <div className="stat-card"><div className="stat-num">{stats.total}</div><div className="stat-label">전체 품목</div></div>
+              <div className="stat-card matched"><div className="stat-num">{stats.matched}</div><div className="stat-label">매칭 완료</div></div>
+              <div className="stat-card unmatched"><div className="stat-num">{stats.unmatched}</div><div className="stat-label">미매칭</div></div>
             </div>
-
             <div className="action-row">
-              <button className="btn-download" onClick={() => buildExcel(processed)}>
+              <button className="btn-download" onClick={()=> brand==="floem" ? buildFloemExcel(processed) : buildPetitExcel(processed)}>
                 ⬇ 엑셀 다운로드 (2시트)
               </button>
               <button className="btn-ghost" onClick={handleReset}>새 파일 처리</button>
             </div>
 
-            {/* 정렬결과 미리보기 */}
+            {/* 미리보기 */}
             <div className="preview">
               <div className="preview-header">정렬결과</div>
               <div className="table-wrap">
                 <table>
-                  <thead>
-                    <tr><th>#</th><th>품목코드</th><th>SKU 이름</th><th>발주수량</th><th>개입수</th><th>합계</th><th>매칭</th></tr>
-                  </thead>
+                  <thead><tr><th>#</th><th>품목코드</th><th>SKU 이름</th><th>발주수량</th><th>개입수</th><th>합계</th><th>매칭</th></tr></thead>
                   <tbody>
                     {(() => {
-                      let cg = -1, rn = 0;
-                      return processed.map((item, idx) => {
-                        const rows = [];
-                        if (item.group !== cg) {
-                          cg = item.group;
-                          rows.push(
-                            <tr key={`g${idx}`} className="group-hdr" style={{ background: gc(item.group).bg }}>
-                              <td colSpan={7}>▶ {GROUP_LABELS[item.group]}</td>
-                            </tr>
-                          );
+                      let cg=-1, cs=-1, rn=0;
+                      return processed.map((item,idx)=>{
+                        const rows=[];
+                        const itemGroup = brand==="floem" ? item.group : item.catGroup*100+item.subGroup;
+                        const prevGroup = cg;
+                        if(itemGroup!==prevGroup){
+                          cg=itemGroup;
+                          const col = brand==="floem" ? fgc(item.group) : pgc(item.catGroup);
+                          const label = brand==="floem"
+                            ? FLOEM_GROUP_LABELS[String(item.group)]
+                            : `${PETIT_CAT_LABELS[item.catGroup]} — ${getPetitGroupLabel(item)}`;
+                          rows.push(<tr key={`g${idx}`} className="group-hdr" style={{background:col.bg}}><td colSpan={7}>▶ {label}</td></tr>);
                         }
                         rn++;
-                        const col = gc(item.group);
+                        const col = brand==="floem" ? fgc(item.group) : pgc(item.catGroup);
                         rows.push(
-                          <tr key={idx} style={{ background: rn%2===0 ? col.alt : col.light }}>
+                          <tr key={idx} style={{background:rn%2===0?col.alt:col.light}}>
                             <td className="td-num">{rn}</td>
-                            <td className="td-code">{item.code || "—"}</td>
-                            <td className="td-name">{String(item.row[2] || "")}</td>
-                            <td className="td-center">{item.row[4] ?? "—"}</td>
-                            <td className="td-center">{item.packQty ?? "—"}</td>
-                            <td className="td-center bold">{item.total ?? "—"}</td>
-                            <td className="td-center">
-                              <span className={item.master ? "badge-ok" : "badge-ng"}>
-                                {item.master ? "✓" : "✗"}
-                              </span>
-                            </td>
+                            <td className="td-code">{item.code||"—"}</td>
+                            <td className="td-name">{String(item.row[2]||"")}</td>
+                            <td className="td-center">{item.row[4]??"—"}</td>
+                            <td className="td-center">{item.packQty??"—"}</td>
+                            <td className="td-center bold">{item.total??"—"}</td>
+                            <td className="td-center"><span className={item.master?"badge-ok":"badge-ng"}>{item.master?"✓":"✗"}</span></td>
                           </tr>
                         );
                         return rows;
                       });
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* 품목별 합계 미리보기 */}
-            <div className="preview">
-              <div className="preview-header">품목별 합계</div>
-              <div className="table-wrap">
-                <table>
-                  <thead><tr><th>품목코드</th><th>발주수량 합계</th><th>행수</th></tr></thead>
-                  <tbody>
-                    {(() => {
-                      const codeMap = {};
-                      const noQtyMap = {};
-                      processed.forEach((item) => {
-                        const key = item.displayName || item.code || String(item.row[2] || "").trim();
-                        if (!key) return;
-                        if (item.noQty) {
-                          if (!noQtyMap[key]) noQtyMap[key] = { group: item.group, sortNum: item.sortNum, count: 0 };
-                          noQtyMap[key].count += 1;
-                        } else {
-                          if (!codeMap[key]) codeMap[key] = { group:item.group, sortNum:item.sortNum, qty:0, count:0 };
-                          const q = item.total!=null ? item.total : (item.row[4]!=null ? Number(item.row[4]) : 0);
-                          codeMap[key].qty += q;
-                          codeMap[key].count += 1;
-                        }
-                      });
-                      const noQtyEntries = Object.entries(noQtyMap).sort(([,a],[,b]) => a.group-b.group||a.sortNum-b.sortNum);
-                      const sorted = Object.entries(codeMap).sort(([,a],[,b]) => a.group-b.group||a.sortNum-b.sortNum);
-                      const rows = [];
-                      if (noQtyEntries.length > 0) {
-                        rows.push(<tr key="noqty-hdr" className="group-hdr" style={{background:"#B71C1C"}}><td colSpan={3}>⚠ 수량 미확인 — 직접 확인 필요</td></tr>);
-                        noQtyEntries.forEach(([key, s], i) => rows.push(
-                          <tr key={`nq${key}`} style={{background:i%2===0?"#FFEBEE":"#FFCDD2"}}>
-                            <td className="td-code">{key}</td>
-                            <td className="td-center" style={{color:"#B71C1C",fontWeight:700}}>확인필요</td>
-                            <td className="td-center" style={{color:"#B71C1C"}}>{s.count}</td>
-                          </tr>
-                        ));
-                      }
-                      let cg2=-999, ri=0;
-                      sorted.forEach(([key, s]) => {
-                        if (s.group !== cg2) {
-                          cg2 = s.group;
-                          rows.push(<tr key={`sg${key}`} className="group-hdr" style={{background:gc(s.group).bg}}><td colSpan={3}>▶ {GROUP_LABELS[String(s.group)]}</td></tr>);
-                        }
-                        ri++;
-                        rows.push(
-                          <tr key={key} style={{background:ri%2===0?gc(s.group).alt:gc(s.group).light}}>
-                            <td className="td-code">{key}</td>
-                            <td className="td-center bold">{s.qty}</td>
-                            <td className="td-center" style={{color:"#546E7A"}}>{s.count}</td>
-                          </tr>
-                        );
-                      });
-                      return rows;
                     })()}
                   </tbody>
                 </table>
