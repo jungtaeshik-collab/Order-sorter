@@ -226,8 +226,8 @@ function buildExcel(processed) {
   wsData.forEach((row) => {
     const cellAddr = XLSX.utils.encode_cell({ r: wsRow, c: 0 });
     const firstVal = row[0] != null ? String(row[0]) : "";
-    if (firstVal.startsWith("▶")) {
-      // 헤더행 전체 열에 노란색 적용
+    if (firstVal.includes("숫자 오름차순")) {
+      // 그룹 헤더행 전체 열에 노란색 적용
       for (let c = 0; c < 27; c++) {
         const addr = XLSX.utils.encode_cell({ r: wsRow, c });
         if (!ws1[addr]) ws1[addr] = { t: "s", v: c === 0 ? firstVal : "" };
@@ -270,8 +270,9 @@ function buildExcel(processed) {
     if (s.group !== curG2) { curG2 = s.group; ws2Data.push([`▶ ${GROUP_LABELS[String(s.group)]}`, "", ""]); }
     ws2Data.push([key, s.qty, s.count]);
   });
-  // 총 합계 행 추가
-  const totalCount = Object.values(codeMap).reduce((s, v) => s + v.count, 0);
+  // 총 합계 행 추가 (수량 미확인 행수도 포함)
+  const totalCount = Object.values(codeMap).reduce((s, v) => s + v.count, 0)
+                   + Object.values(noQtyMap).reduce((s, v) => s + v.count, 0);
   const totalQty = Object.values(codeMap).reduce((s, v) => s + v.qty, 0);
   ws2Data.push(["▶ 합계", totalQty, totalCount]);
 
