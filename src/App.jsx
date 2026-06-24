@@ -176,6 +176,8 @@ const SKU_ID_PACK_QTY = {
   "3679810":2,"3679753":2,"3679812":2,"24301128":2,"24301121":2,
   // 3개입
   "24301124":3,"24301127":3,
+  "6548986":3,"6548987":3,"6561034":3,"6561020":3,"6561006":3,"6561004":3,
+  "6561003":3,"6560996":3,"6560992":3,"6560987":3,"3043884":3,
   "3679822":3,"3679837":3,"3679842":3,"3679830":3,"3679811":3,
   "3679783":3,"3679782":3,"3679775":3,"3679773":3,"3679772":3,"3679766":3,
   "3679763":3,"3679762":3,"3679761":3,"3679760":3,"3679759":3,"3679758":3,
@@ -184,8 +186,9 @@ const SKU_ID_PACK_QTY = {
   // 4개입
   "8245967":4,"8245986":4,"8245974":4,"8245993":4,"8245977":4,
   "3043880":4,"3043870":4,"3043869":4,"24301123":4,"17906742":4,
+  "10155526":4,"11712157":4,
   // 5개입
-  "24301125":5,
+  "24301125":5,"18501380":5,
   // 6개입
   "10467741":6,"10467755":6,"10467737":6,"10467728":6,"10467757":6,
   "10467734":6,"10467735":6,"10467753":6,"13404787":6,
@@ -376,9 +379,23 @@ function processPetit(merged, masterCodes) {
     const sortNum = getPetitSortNum(code);
     let match = findRankExact(nameStr, index);
     if (!match) { const f = findRankFuzzy(nameStr, masterCodes); if (f) match = f; }
-    const rawPackQty = extractPackQty(nameStr);
     const skuIdStr = String(row[1] || "").trim();
-    const packQty = SKU_ID_PACK_QTY[skuIdStr] != null ? SKU_ID_PACK_QTY[skuIdStr] : rawPackQty;
+    // 쁘띠견출지 무시 패턴
+    const labelIgnorePattern = /\d+매(?!입)|\d+장|300개입/;
+    const nameForQty = (catGroup === 1)
+      ? nameStr.replace(labelIgnorePattern, "")
+      : nameStr;
+    const rawPackQty = extractPackQty(nameForQty);
+    // SKU ID 강제 개입수 우선
+    let packQty = SKU_ID_PACK_QTY[skuIdStr] != null ? SKU_ID_PACK_QTY[skuIdStr] : rawPackQty;
+    // 쁘띠견출지: 개입수 없으면 매입가(K열=index10) ÷ 900으로 계산
+    if (packQty == null && catGroup === 1) {
+      const price = row[10] != null ? Number(row[10]) : null;
+      if (price && price > 0) {
+        const ratio = price / 900;
+        if (ratio >= 2.7 && ratio <= 3.2) packQty = 3;
+      }
+    }
     const eVal = row[4];
     const eNum = eVal != null && eVal !== "" ? Number(eVal) : null;
     const total = eNum != null && packQty != null ? eNum * packQty : null;
