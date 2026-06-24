@@ -391,3 +391,20 @@ td { padding: 8px 12px; border-bottom: 1px solid rgba(0,0,0,0.04); }
 }
 .btn-brand.floem .brand-icon { background: #1565C0; }
 .btn-brand.petit .brand-icon { background: #AD1457; }
+
+/* ── 뒤로가기 버튼 ── */
+.btn-back {
+  width: 44px; height: 44px;
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+  border: 2px solid rgba(255,255,255,0.6);
+  border-radius: 10px;
+  font-size: 22px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.btn-back:hover { background: rgba(255,255,255,0.45); transform: scale(1.05); }
