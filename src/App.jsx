@@ -97,12 +97,34 @@ function findRankFuzzy(name, masterCodes) {
 }
 function extractPackQty(name) {
   if (!name) return null;
-  let m = name.match(/\((\d+)개입\)/);
+  const n = name;
+
+  // 소음방지보드는 매 단위 무시, 개/개입만
+  const isSoundBoard = /소음방지보드/.test(n);
+
+  // 괄호 있는 패턴 우선
+  let m = n.match(/\((\d+)개입\)/);
   if (m) return parseInt(m[1], 10);
-  m = name.match(/\((\d+)매입\)/);
+  m = n.match(/\((\d+)매입\)/);
   if (m) return parseInt(m[1], 10);
-  m = name.match(/\((\d+)개\)/);
+  m = n.match(/\((\d+)개\)/);
   if (m) return parseInt(m[1], 10);
+  if (!isSoundBoard) {
+    m = n.match(/\((\d+)매\)/);
+    if (m) return parseInt(m[1], 10);
+  }
+
+  // 괄호 없는 패턴
+  if (/3개입/.test(n)) return 3;
+  // N장 → N매입
+  m = n.match(/(\d+)장/);
+  if (m) return parseInt(m[1], 10);
+  // N매 → N개입 (소음방지보드 제외)
+  if (!isSoundBoard) {
+    m = n.match(/(\d+)매(?!입)/);
+    if (m) return parseInt(m[1], 10);
+  }
+
   return null;
 }
 function mergeRows(raw) {
@@ -143,6 +165,12 @@ const SKU_ID_MAP = {
   "59366014": "아크릴 홀더 1단",
   "64312192": "아크릴 홀더 검정 1단",
   "64312193": "아크릴 홀더 흰색 1단",
+};
+
+// SKU ID → 강제 개입수 (브랜드 공통)
+const SKU_ID_PACK_QTY = {
+  "10467755": 6, "10467737": 6, "10467728": 6, "10467741": 6,
+  "10467757": 6, "10467734": 6, "10467753": 6, "10467735": 6,
 };
 
 function getFloemCode(name) {
@@ -205,7 +233,8 @@ function processFloem(merged, masterCodes) {
     const code = skuIdMapped ? null : getFloemCode(nameStr);
     const group = getFloemGroup(code);
     const [sortNum, sortSuffix] = getFloemSortKey(code);
-    const packQty = extractPackQty(nameStr);
+    const rawPackQty = extractPackQty(nameStr);
+    const packQty = SKU_ID_PACK_QTY[skuId] != null ? SKU_ID_PACK_QTY[skuId] : rawPackQty;
     const eVal = row[4];
     const eNum = eVal != null && eVal !== "" ? Number(eVal) : null;
     const total = eNum != null && packQty != null ? eNum * packQty : null;
@@ -323,7 +352,9 @@ function processPetit(merged, masterCodes) {
     const sortNum = getPetitSortNum(code);
     let match = findRankExact(nameStr, index);
     if (!match) { const f = findRankFuzzy(nameStr, masterCodes); if (f) match = f; }
-    const packQty = extractPackQty(nameStr);
+    const rawPackQty = extractPackQty(nameStr);
+    const skuIdStr = String(row[1] || "").trim();
+    const packQty = SKU_ID_PACK_QTY[skuIdStr] != null ? SKU_ID_PACK_QTY[skuIdStr] : rawPackQty;
     const eVal = row[4];
     const eNum = eVal != null && eVal !== "" ? Number(eVal) : null;
     const total = eNum != null && packQty != null ? eNum * packQty : null;
@@ -602,11 +633,18 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="header-inner">
-          <div className="logo" onClick={handleBrandReset} style={{cursor:"pointer"}}>
-            <span className="logo-mark">{brand === "petit" ? "P" : "F"}</span>
-            <span className="logo-text">
-              {brand === "petit" ? "쁘띠팬시 자동정렬 합계" : "플로엠제품 자동정렬 합계"}
-            </span>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            {brand && (
+              <button className="btn-back" onClick={handleBrandReset} title="브랜드 선택으로">
+                ←
+              </button>
+            )}
+            <div className="logo" onClick={handleBrandReset} style={{cursor:"pointer"}}>
+              <span className="logo-mark">{brand === "petit" ? "P" : "F"}</span>
+              <span className="logo-text">
+                {brand === "petit" ? "쁘띠팬시 자동정렬 합계" : "플로엠제품 자동정렬 합계"}
+              </span>
+            </div>
           </div>
           <div className="header-right">
             {masterLoaded && masterMeta && (
@@ -650,8 +688,8 @@ export default function App() {
         {step === "ready" && (
           <div className="card center-card">
             <div className="step-icon">📂</div>
-            <h2>발주 파일 업로드</h2>
-            <p className="desc">쿠팡 발주 엑셀을 올려주세요</p>
+            <h2>{brand === "floem" ? "플로엠" : "쁘띠팬시"} 발주파일 업로드</h2>
+            <p className="desc">쿠팡에서 받은 {brand === "floem" ? "플로엠" : "쁘띠팬시"} 발주 엑셀을 올려주세요</p>
             <div
               className="upload-zone"
               onDragOver={(e)=>{e.preventDefault();e.currentTarget.classList.add("drag-over");}}
