@@ -169,8 +169,21 @@ const SKU_ID_MAP = {
 
 // SKU ID → 강제 개입수 (브랜드 공통)
 const SKU_ID_PACK_QTY = {
-  "10467755": 6, "10467737": 6, "10467728": 6, "10467741": 6,
-  "10467757": 6, "10467734": 6, "10467753": 6, "10467735": 6,
+  // 3개입
+  "24301124":3,"3679822":3,"3679837":3,"3679842":3,"3679830":3,"3679811":3,
+  "3679783":3,"3679782":3,"3679775":3,"3679773":3,"3679772":3,"3679766":3,
+  "3679763":3,"3679762":3,"3679761":3,"3679760":3,"3679759":3,"3679758":3,
+  "3679757":3,"3679756":3,"3679750":3,"3679749":3,"3679739":3,"3679732":3,
+  "3679729":3,"3679728":3,"3679727":3,"3679726":3,"3267274":3,
+  // 6개입
+  "10467741":6,"10467755":6,"10467737":6,"10467728":6,"10467757":6,
+  "10467734":6,"13404787":6,"1046773524301126":6,
+  // 4개입
+  "8245967":4,"8245986":4,"8245974":4,"8245993":4,"8245977":4,
+  "3043880":4,"3043870":4,"3043869":4,"24301123":4,
+  // 2개입
+  "3679747":2,"3679744":2,"3679743":2,"8274318":2,"3679808":2,
+  "3679810":2,"3679753":2,"3679812":2,"24301128":2,
 };
 
 function getFloemCode(name) {
@@ -243,7 +256,11 @@ function processFloem(merged, masterCodes) {
     const displayName = skuIdMapped || null;
     result.push({ group: noQty ? -1 : group, sortNum: effectiveSortNum, sortSuffix, code, displayName, master: match?.mc || null, method, packQty, total, noQty, row: [...row] });
   });
-  result.sort((a, b) => a.group - b.group || a.sortNum - b.sortNum || a.sortSuffix.localeCompare(b.sortSuffix));
+  result.sort((a, b) => {
+    // 수량 미확인 맨 위
+    if (a.noQty !== b.noQty) return a.noQty ? -1 : 1;
+    return a.group - b.group || a.sortNum - b.sortNum || a.sortSuffix.localeCompare(b.sortSuffix);
+  });
   return result;
 }
 
