@@ -359,3 +359,35 @@ td { padding: 8px 12px; border-bottom: 1px solid rgba(0,0,0,0.04); }
   transform: scale(1.01);
 }
 .upload-zone { cursor: pointer; }
+
+/* ── 브랜드 선택 ── */
+.btn-brand {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 16px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  transition: all 0.15s;
+}
+.btn-brand:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.12); }
+.btn-brand.floem { border-color: #1565C0; }
+.btn-brand.floem:hover { background: #E3F0FF; }
+.btn-brand.petit { border-color: #AD1457; }
+.btn-brand.petit:hover { background: #FCE4EC; }
+.brand-icon {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 900; color: #fff;
+}
+.btn-brand.floem .brand-icon { background: #1565C0; }
+.btn-brand.petit .brand-icon { background: #AD1457; }
