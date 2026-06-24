@@ -82,7 +82,7 @@ function findRankFuzzy(name, masterCodes) {
     }
   });
   if (best) return best;
-  const nameRaw = name.replace(/[\s()[\]]/g, "");
+  const nameRaw = name.replace(/ver\.?\d+/gi,"").replace(/[\s()[\]]/g, "");
   for (let l = Math.min(8, nameRaw.length); l >= 5; l--) {
     for (let s = 0; s <= nameRaw.length - l; s++) {
       const sub = nameRaw.slice(s, s + l);
@@ -170,7 +170,7 @@ const SKU_ID_MAP = {
 // SKU ID → 강제 개입수 (브랜드 공통)
 const SKU_ID_PACK_QTY = {
   // 1개입
-  "2134831":1,
+  "2134831":1,"2134840":1,
   // 2개입
   "3679747":2,"3679744":2,"3679743":2,"8274318":2,"3679808":2,
   "3679810":2,"3679753":2,"3679812":2,"24301128":2,"24301121":2,
@@ -183,17 +183,18 @@ const SKU_ID_PACK_QTY = {
   "3679729":3,"3679728":3,"3679727":3,"3679726":3,"3267274":3,
   // 4개입
   "8245967":4,"8245986":4,"8245974":4,"8245993":4,"8245977":4,
-  "3043880":4,"3043870":4,"3043869":4,"24301123":4,
+  "3043880":4,"3043870":4,"3043869":4,"24301123":4,"17906742":4,
   // 5개입
   "24301125":5,
   // 6개입
   "10467741":6,"10467755":6,"10467737":6,"10467728":6,"10467757":6,
   "10467734":6,"10467735":6,"10467753":6,"13404787":6,
-  "24301126":6,"24301122":6,"10467758":6,"10467727":6,
+  "24301126":6,"24301122":6,"10467758":6,"10467727":6,"10467746":6,"10467732":6,
 };
 
 function getFloemCode(name) {
   if (!name) return null;
+  name = name.replace(/ver\.?\d+/gi,"").replace(/v\.?\d+(?=\s|$|\))/gi,"");
   const packM = name.match(/Pack_([A-Za-z]{1,4}[\d][\w\-.]*)/);
   if (packM) return normalize(packM[1]);
   const hyM = name.match(/\b([A-Za-z]{1,4})-(\d[\w\-]*)/);
@@ -337,7 +338,7 @@ function getPetitEtcGroup(name) {
 function getPetitCode(name) {
   if (!name) return null;
   // 언더바, 's 무시하고 코드 추출 (멋쟁이팽귄's → 멋쟁이팽귄)
-  const n = name.replace(/_/g,"").replace(/'s/gi,"").replace(/’s/gi,"");
+  const n = name.replace(/_/g,"").replace(/'s/gi,"").replace(/’s/gi,"").replace(/ver\.?\d+/gi,"").replace(/v\.?\d+/gi,"");
   const packM = n.match(/Pack_?([A-Za-z]{1,4}[\d][\w\-.]*)/i);
   if (packM) return packM[1].toUpperCase();
   const hyM = n.match(/([A-Za-z]{1,4})-(\d[\w\-]*)/);
