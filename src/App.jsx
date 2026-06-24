@@ -55,12 +55,26 @@ function buildMasterIndex(masterCodes) {
   return index;
 }
 function findRankExact(name, index) {
+  name = normalizeColorAlias(name);
   for (const key of skuVariants(name)) {
     if (key in index) return { rank: index[key].i, mc: index[key].mc };
   }
   return null;
 }
+// 색상 별칭 정규화 (매칭용)
+function normalizeColorAlias(s) {
+  return s
+    .replace(/파랑/g,"청색").replace(/블루/g,"청색").replace(/BLUE/gi,"청색")
+    .replace(/빨강/g,"적색").replace(/레드/g,"적색").replace(/RED/gi,"적색")
+    .replace(/검정/g,"흑색").replace(/블랙/g,"흑색").replace(/BLACK/gi,"흑색")
+    .replace(/흰색/g,"백색").replace(/화이트/g,"백색").replace(/WHITE/gi,"백색")
+    .replace(/노랑/g,"황색").replace(/옐로/g,"황색").replace(/YELLOW/gi,"황색")
+    .replace(/초록/g,"녹색").replace(/그린/g,"녹색").replace(/GREEN/gi,"녹색")
+    .replace(/X\d+/gi,"")  // X5, X4 등 무시
+    .replace(/ver\.?\d+/gi,"").replace(/v\.?\d+(?=\s|$|\))/gi,""); // ver 무시
+}
 function findRankFuzzy(name, masterCodes) {
+  name = normalizeColorAlias(name);
   const nameN = normalize(name);
   let best = null;
   const seen = new Set();
@@ -186,7 +200,7 @@ const SKU_ID_PACK_QTY = {
   "3679763":3,"3679762":3,"3679761":3,"3679760":3,"3679759":3,"3679758":3,
   "3679757":3,"3679756":3,"3679750":3,"3679749":3,"3679739":3,"3679732":3,
   "3679729":3,"3679728":3,"3679727":3,"3679726":3,"3267274":3,
-  "6561021":3,"6560993":3,"6560999":3,"6561031":3,"6561078":3,"6561115":3,"6561044":3,"6561025":3,"6561122":3,"6560977":3,"6561080":3,"6560974":3,"6560976":3,"6561028":3,"6561024":3,"18314410":3,"6561092":3,"6561081":3,"6561094":3,"6561097":3,"6561098":3,"6561079":3,"6560982":3,"6560988":3,"6560995":3,"6560997":3,"6561029":3,"6561032":3,"6561039":3,"6561040":3,"6561041":3,"6561043":3,"6561045":3,"6561047":3,"6561048":3,"6561049":3,"6561083":3,"6561102":3,"6561104":3,"6561106":3,"6561109":3,"6965227":3,"6561110":3,"6560979":3,"6561117":3,"6561119":3,"6561105":3,"6561037":3,"6561108":3,"6561001":3,"6561103":3,
+  "6561021":3,"6560993":3,"6560999":3,"6561031":3,"6561078":3,"6561115":3,"6561044":3,"6561025":3,"6561122":3,"6560977":3,"6561080":3,"6560974":3,"6560976":3,"6561028":3,"6561024":3,"18314410":3,"6561092":3,"6561081":3,"6561094":3,"6561097":3,"6561098":3,"6561079":3,"6560982":3,"6560988":3,"6560995":3,"6560997":3,"6561029":3,"6561032":3,"6561039":3,"6561040":3,"6561041":3,"6561043":3,"6561045":3,"6561047":3,"6561048":3,"6561049":3,"6561083":3,"6561102":3,"6561104":3,"6561106":3,"6561109":3,"6965227":3,"6561110":3,"6560979":3,"6561117":3,"6561119":3,"6561105":3,"6561037":3,"6561108":3,"6561001":3,"6561103":3,"6561118":3,
   // 4개입
   "8245967":4,"8245986":4,"8245974":4,"8245993":4,"8245977":4,
   "3043880":4,"3043870":4,"3043869":4,"24301123":4,"17906742":4,
@@ -326,14 +340,42 @@ function getPetitStickerGroup(code) {
   return 99;
 }
 // 견출지 그룹
-function getPetitLabelGroup(code) {
+// 견출지 18가지 분류 (C열 SKU이름 기준)
+const LABEL_CATS = [
+  [0,  "인덱스",    ["인덱스"]],
+  [1,  "보호",      ["보호"]],
+  [2,  "칼라분류",  ["칼라분류"]],
+  [3,  "홀로그램",  ["홀로그램"]],
+  [4,  "유광",      ["유광"]],
+  [5,  "크라프트",  ["크라프트","크래프트"]],
+  [6,  "냉장고",    ["냉장고"]],
+  [7,  "봉인",      ["봉인"]],
+  [8,  "화살표",    ["화살표"]],
+  [9,  "칼라",      ["칼라"]],
+  [10, "눈알",      ["눈알"]],
+  [11, "모서리",    ["모서리"]],
+  [12, "모양",      ["모양"]],
+  [13, "장식",      ["장식"]],
+  [14, "링라벨",    ["링라벨","링 라벨"]],
+  [15, "숫자",      ["숫자"]],
+  [16, "마스킹",    ["마스킹"]],
+  [17, "스티커명찰",["스티커명찰","스티커 명찰"]],
+];
+function getPetitLabelGroup(code, name) {
+  const n = (name || "").replace(/\s/g,"").toUpperCase();
+  for (const [order, label, keywords] of LABEL_CATS) {
+    for (const kw of keywords) {
+      if (n.includes(kw.replace(/\s/g,"").toUpperCase())) return order;
+    }
+  }
+  // 코드 기반 폴백
   if (!code) return 99;
   const c = code.toUpperCase().replace(/_/g,"");
-  if (c.startsWith("20")) return 0;
-  if (c.startsWith("OPM")) return 1;
-  if (c.startsWith("DT")) return 2;
-  if (c.startsWith("HR")) return 3;
-  return 4;
+  if (c.startsWith("20")) return 99;
+  if (c.startsWith("OPM")) return 99;
+  if (c.startsWith("DT")) return 99;
+  if (c.startsWith("HR")) return 99;
+  return 99;
 }
 // 기타 그룹
 function getPetitEtcGroup(name) {
@@ -378,7 +420,7 @@ function processPetit(merged, masterCodes) {
       subGroup = getPetitStickerGroup(code);
     } else if (category === "견출지") {
       catGroup = 1;
-      subGroup = getPetitLabelGroup(code);
+      subGroup = getPetitLabelGroup(code, nameStr);
     } else {
       catGroup = 2;
       subGroup = getPetitEtcGroup(nameStr);
@@ -388,7 +430,7 @@ function processPetit(merged, masterCodes) {
     if (!match) { const f = findRankFuzzy(nameStr, masterCodes); if (f) match = f; }
     const skuIdStr = String(row[1] || "").trim();
     // 쁘띠견출지 무시 패턴
-    const labelIgnorePattern = /\d+매(?!입)|\d+장|300개입/;
+    const labelIgnorePattern = /\d+매(?!입)|\d+장|300개입|15개입/;
     const nameForQty = (catGroup === 1)
       ? nameStr.replace(labelIgnorePattern, "")
       : nameStr;
@@ -407,6 +449,8 @@ function processPetit(merged, masterCodes) {
     const eNum = eVal != null && eVal !== "" ? Number(eVal) : null;
     const total = eNum != null && packQty != null ? eNum * packQty : null;
     const noQty = eNum == null || packQty == null;
+    // 특정 SKU ID 강제 분류
+    if (skuIdStr === "62368835") { catGroup = 1; subGroup = 2; } // 칼라분류
     result.push({ catGroup, subGroup, sortNum, skuId, code, master: match?.mc || null, packQty, total, noQty, row: [...row] });
   });
   // 정렬: 카테고리 → 서브그룹 → 숫자 → SKU ID 오름차순
@@ -419,7 +463,12 @@ function processPetit(merged, masterCodes) {
 
 const PETIT_CAT_LABELS = { 0: "쁘띠스티커", 1: "쁘띠견출지", 2: "쁘띠기타" };
 const PETIT_STICKER_LABELS = { 0: "DA", 1: "PD", 2: "TS", 99: "기타" };
-const PETIT_LABEL_LABELS = { 0: "20-", 1: "OPM", 2: "DT", 3: "HR", 4: "기타" };
+const PETIT_LABEL_LABELS = {
+  0:"인덱스", 1:"보호", 2:"칼라분류", 3:"홀로그램", 4:"유광",
+  5:"크라프트", 6:"냉장고", 7:"봉인", 8:"화살표", 9:"칼라",
+  10:"눈알", 11:"모서리", 12:"모양", 13:"장식", 14:"링라벨",
+  15:"숫자", 16:"마스킹", 17:"스티커명찰", 99:"기타"
+};
 const PETIT_ETC_LABELS = { 0: "만년스템프/스탬프", 1: "스탬프/스템프", 2: "패드", 3: "명찰", 4: "기타" };
 const PETIT_CAT_COLORS = {
   0: { bg: "#AD1457", light: "#FCE4EC", alt: "#F8BBD9" },
