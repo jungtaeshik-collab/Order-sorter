@@ -402,20 +402,75 @@ function getPetitEtcGroup(name) {
 
 function getPetitCode(name) {
   if (!name) return null;
-  const n = name.replace(/_/g,"").replace(/'s/gi,"").replace(/\u2019s/gi,"")
-               .replace(/ver\.?\d+/gi,"").replace(/v\.?\d+(?=\s|$|\))/gi,"");
-  // Pack_ 코드
-  const packM = n.match(/Pack_?([A-Za-z]{1,4}\d[\w.-]*)/i);
-  if (packM) return packM[1].toUpperCase();
-  // 쁘띠견출지: 20-, OPM-, DT, HR 코드만
-  const labelM = n.match(/\b(20-[A-Za-z0-9]+|OPM-[A-Za-z0-9]+|DT\d+|HR\d+)/i);
+  // Pack_ 제거, 's 제거, ver 제거
+  let n = name
+    .replace(/Pack_?/gi, "")
+    .replace(/_/g, "")
+    .replace(/'s/gi, "").replace(/\u2019s/gi, "")
+    .replace(/ver\.?\d+/gi, "").replace(/v\.?\d+(?=\s|$|\))/gi, "")
+    .trim();
+
+  // 견출지 코드: 20-, OPM-, DT, HR 우선 추출
+  const labelM = n.match(/\b(20-[A-Za-z0-9]+(?:\([^)]+\))?|OPM-[A-Za-z0-9]+|DT\d+|HR\d+)/i);
   if (labelM) return labelM[1].toUpperCase();
+
   // 스티커: DA, PD, TS 코드
   const stickerM = n.match(/\b(DA\d+[\w-]*|PD\d+[\w-]*|TS\d+[\w-]*)/i);
   if (stickerM) return stickerM[1].toUpperCase();
-  // 일반 (X5, X6 같은 단순코드 제외 - 영문 2자 이상 + 숫자 2자리 이상)
+
+  // 20- 없는 견출지: 숫자(2자리 이상)+색상 패턴 → 20-번호+색상코드로 변환
+  // ex) 306검정 → 20-306K, F101청색 → 20-F101B, 303형광주황 → 20-303FO
+  const labelGuessM = n.match(/^(?:[^\w]*)([A-Za-z]{0,2}\d{2,4})(.*)/);
+  if (labelGuessM) {
+    const numPart = labelGuessM[1];
+    const rest = labelGuessM[2] || "";
+    const colorCode = inferColorCode(rest + n);
+    if (colorCode) return ("20-" + numPart + colorCode).toUpperCase();
+    if (numPart.length >= 2) return ("20-" + numPart).toUpperCase();
+  }
+
+  // 일반 코드 (X5, X6 제외 - 영문 2자 이상 + 숫자 2자리 이상)
   const codes = n.match(/[A-Za-z]{2,}\d{2,}[\w.-]*/g);
   return codes ? codes[0].toUpperCase() : null;
+}
+
+// 영문 색상코드 → 한글 마스터 표기 변환
+const ENG_COLOR_MAP = {
+  "FG":"(형광녹색)", "FL":"(형광노랑)", "FP":"(형광핑크)",
+  "FO":"(형광주황)", "FR":"(형광적색)",
+  "R":"(적색)", "BL":"(청색)", "B":"(청색)",
+  "G":"(녹색)", "Y":"(노랑)", "A":"(혼합)",
+  "BK":"(검정)", "K":"(검정)", "W":"(흰색)",
+  "SL":"(은색)",
+};
+function inferColorCode(s) {
+  // 형광 한글
+  if (/형광녹색|형광그린/.test(s)) return "(형광녹색)";
+  if (/형광노랑|형광황색/.test(s)) return "(형광노랑)";
+  if (/형광핑크|형광분홍/.test(s)) return "(형광핑크)";
+  if (/형광주황|형광오렌지/.test(s)) return "(형광주황)";
+  if (/형광적색|형광빨강/.test(s)) return "(형광적색)";
+  // 일반 한글
+  if (/적색|빨강|빨간/.test(s)) return "(적색)";
+  if (/청색|파랑|파란/.test(s)) return "(청색)";
+  if (/녹색|초록/.test(s)) return "(녹색)";
+  if (/황색|노랑|노란/.test(s)) return "(노랑)";
+  if (/혼합/.test(s)) return "(혼합)";
+  if (/흑색|검정|블랙/.test(s)) return "(검정)";
+  if (/백색|흰색|화이트/.test(s)) return "(흰색)";
+  if (/하늘/.test(s)) return "(하늘)";
+  if (/분홍|핑크/.test(s)) return "(분홍)";
+  if (/보라/.test(s)) return "(보라)";
+  if (/투명/.test(s)) return "(투명)";
+  if (/은색|실버/.test(s)) return "(은색)";
+  if (/금색|골드/.test(s)) return "(금색)";
+  // 영문 코드: 문자열 끝에 오는 영문만 (FO, BL, BK, R, B, G 등)
+  const engM = s.match(/([A-Z]{1,3})$/i);
+  if (engM) {
+    const code = engM[1].toUpperCase();
+    if (ENG_COLOR_MAP[code]) return ENG_COLOR_MAP[code];
+  }
+  return null;
 }
 
 function getPetitSortNum(code) {
