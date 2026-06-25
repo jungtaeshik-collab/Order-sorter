@@ -214,16 +214,17 @@ const SKU_ID_PACK_QTY = {
   "3679757":3,"3679756":3,"3679750":3,"3679749":3,"3679739":3,"3679732":3,
   "3679729":3,"3679728":3,"3679727":3,"3679726":3,"3267274":3,
   "6561021":3,"6560993":3,"6560999":3,"6561031":3,"6561078":3,"6561115":3,"6561044":3,"6561025":3,"6561122":3,"6560977":3,"6561080":3,"6560974":3,"6560976":3,"6561028":3,"6561024":3,"18314410":3,"6561092":3,"6561081":3,"6561094":3,"6561097":3,"6561098":3,"6561079":3,"6560982":3,"6560988":3,"6560995":3,"6560997":3,"6561029":3,"6561032":3,"6561039":3,"6561040":3,"6561041":3,"6561043":3,"6561045":3,"6561047":3,"6561048":3,"6561049":3,"6561083":3,"6561102":3,"6561104":3,"6561106":3,"6561109":3,"6965227":3,"6561110":3,"6560979":3,"6561117":3,"6561119":3,"6561105":3,"6561037":3,"6561108":3,"6561001":3,"6561103":3,"6561118":3,
+  "6561113":3,"3043883":3,"6560990":3,"20283296":3,
   // 4개입
   "8245967":4,"8245986":4,"8245974":4,"8245993":4,"8245977":4,
   "3043880":4,"3043870":4,"3043869":4,"24301123":4,"17906742":4,
   "10155526":4,"11712157":4,
   "18314428":4,"17257844":4,"18501375":4,"17257850":4,"17257863":4,
   // 5개입
-  "24301125":5,"18501380":5,
+  "24301125":5,"18501380":5,"18501374":5,"18501385":5,"20283299":5,"20283318":5,
   "17257847":5,"17257856":5,"17257857":5,"18314418":5,"18314427":5,"18501343":5,"18501369":5,"18501378":5,"18501381":5,"18501383":5,"17257864":5,"18314407":5,"18314417":5,"18314436":5,"18314458":5,
   // 6개입
-  "10467740":6,"10467741":6,"10467755":6,"10467737":6,"10467728":6,"10467757":6,
+  "18501377":6,"10467740":6,"10467741":6,"10467755":6,"10467737":6,"10467728":6,"10467757":6,
   "10467734":6,"10467735":6,"10467753":6,"13404787":6,
   "24301126":6,"24301122":6,"10467758":6,"10467727":6,"10467746":6,"10467732":6,
   "18314420":6,"18501341":6,"18501344":6,"18501351":6,
@@ -410,26 +411,50 @@ function getPetitCode(name) {
     .replace(/ver\.?\d+/gi, "").replace(/v\.?\d+(?=\s|$|\))/gi, "")
     .trim();
 
-  // 견출지 코드: 20-, OPM-, DT, HR 우선 추출
-  const labelM = n.match(/\b(20-[A-Za-z0-9]+(?:\([^)]+\))?|OPM-[A-Za-z0-9]+|DT\d+|HR\d+)/i);
-  if (labelM) return labelM[1].toUpperCase();
-
-  // 스티커: DA, PD, TS 코드
+  // 스티커: DA, PD, TS 코드 (견출지보다 먼저 체크)
   const stickerM = n.match(/\b(DA\d+[\w-]*|PD\d+[\w-]*|TS\d+[\w-]*)/i);
   if (stickerM) return stickerM[1].toUpperCase();
 
-  // 20- 없는 견출지: 숫자(2자리 이상)+색상 패턴 → 20-번호+색상코드로 변환
-  // ex) 306검정 → 20-306K, F101청색 → 20-F101B, 303형광주황 → 20-303FO
+  // 견출지: 20- 포함 코드 추출 (색상까지 포함)
+  // 패턴: 20-xxx(색상) 또는 20-xxx색상(한글) 또는 20-xxxENG코드
+  const labelFullM = n.match(/\b(20-[A-Za-z]?\d+[A-Za-z]*)(\([^)]+\)|[가-힣]+)?/i);
+  if (labelFullM) {
+    const base = labelFullM[1].toUpperCase();
+    const colorPart = labelFullM[2] || "";
+    // 뒤에 영문 색상코드가 base 끝에 붙어있는 경우 (20-403G)
+    const engColorM = base.match(/^(20-[A-Za-z]?\d+)([A-Z]{1,3})$/i);
+    if (engColorM) {
+      const inferredColor = inferColorCode(engColorM[2]);
+      if (inferredColor) return (engColorM[1] + inferredColor).toUpperCase();
+      return base;
+    }
+    // 괄호 색상 또는 한글 색상 붙어있는 경우
+    if (colorPart) {
+      const inferredColor = inferColorCode(colorPart);
+      if (inferredColor) return (base + inferredColor).toUpperCase();
+      return (base + colorPart).toUpperCase();
+    }
+    return base;
+  }
+
+  // OPM-, DT, HR 코드
+  const otherLabelM = n.match(/\b(OPM-[A-Za-z0-9]+|DT\d+|HR\d+)/i);
+  if (otherLabelM) return otherLabelM[1].toUpperCase();
+
+  // 20- 없는 견출지 추론: 숫자+색상 → 20-번호+색상
   const labelGuessM = n.match(/^(?:[^\w]*)([A-Za-z]{0,2}\d{2,4})(.*)/);
   if (labelGuessM) {
     const numPart = labelGuessM[1];
     const rest = labelGuessM[2] || "";
-    const colorCode = inferColorCode(rest + n);
+    // rest 끝의 영문 색상코드 또는 한글 색상
+    const engM = rest.match(/([A-Z]{1,3})$/i);
+    let colorCode = inferColorCode(rest + n);
+    if (!colorCode && engM) colorCode = inferColorCode(engM[1]);
     if (colorCode) return ("20-" + numPart + colorCode).toUpperCase();
     if (numPart.length >= 2) return ("20-" + numPart).toUpperCase();
   }
 
-  // 일반 코드 (X5, X6 제외 - 영문 2자 이상 + 숫자 2자리 이상)
+  // 일반 코드 (X5, X6 제외)
   const codes = n.match(/[A-Za-z]{2,}\d{2,}[\w.-]*/g);
   return codes ? codes[0].toUpperCase() : null;
 }
@@ -451,8 +476,10 @@ function inferColorCode(s) {
   if (/형광주황|형광오렌지/.test(s)) return "(형광주황)";
   if (/형광적색|형광빨강/.test(s)) return "(형광적색)";
   // 일반 한글
-  if (/적색|빨강|빨간/.test(s)) return "(적색)";
-  if (/청색|파랑|파란/.test(s)) return "(청색)";
+  if (/빨강|빨간/.test(s)) return "(빨강)";
+  if (/적색/.test(s)) return "(적색)";
+  if (/파랑|파란/.test(s)) return "(파랑)";
+  if (/청색/.test(s)) return "(청색)";
   if (/녹색|초록/.test(s)) return "(녹색)";
   if (/황색|노랑|노란/.test(s)) return "(노랑)";
   if (/혼합/.test(s)) return "(혼합)";
