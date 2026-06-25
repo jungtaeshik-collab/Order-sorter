@@ -534,6 +534,7 @@ function processPetit(merged, masterCodes) {
   merged.forEach((row) => {
     const nameStr = row[2] != null ? String(row[2]).trim() : "";
     if (!nameStr || /^\d+$/.test(nameStr)) return;
+    const skuIdStr = String(row[1] || "").trim();
     const skuId = row[1] != null ? Number(row[1]) : 0;
     const code = getPetitCode(nameStr, skuIdStr);
     const category = getPetitCategory(code, nameStr);
@@ -551,7 +552,6 @@ function processPetit(merged, masterCodes) {
     const sortNum = getPetitSortNum(code);
     let match = findRankExact(nameStr, index);
     if (!match) { const f = findRankFuzzy(nameStr, masterCodes); if (f) match = f; }
-    const skuIdStr = String(row[1] || "").trim();
     // 쁘띠견출지 무시 패턴
     const labelIgnorePattern = /\d+매(?!입)|\d+장|300개입|15개입/;
     const nameForQty = (catGroup === 1)
