@@ -509,6 +509,22 @@ function getPetitCode(name, skuId) {
   const opmLikeM = n.match(/\b([A-Z]{1,3}\d{3}[A-Z])\b/i);
   if (opmLikeM) return ("OPM-" + opmLikeM[1]).toUpperCase();
 
+  // isLabel20: 20- 없어도 20-로 강제 인식 (20- 또는 HR이 이미 있으면 스킵)
+  if (isLabel20 && !/20-/.test(n) && !/\bHR\d+/i.test(n)) {
+    const forceM = n.match(/\b([A-Za-z]{0,2}\d{2,4}[A-Za-z]{0,3})\b/);
+    if (forceM) {
+      const fc = forceM[1];
+      const fm = fc.match(/^([A-Za-z]{0,2}\d{2,4})([A-Za-z]{0,3})$/);
+      const fNum = fm ? fm[1] : fc;
+      const fSuf = fm ? fm[2].toUpperCase() : "";
+      if (fSuf === "A") return ("20-" + fNum + "A").toUpperCase();
+      if (fSuf) { const fc2 = inferColorCode(fSuf); if (fc2) return ("20-" + fNum + fc2).toUpperCase(); }
+      const fRest = n.slice(n.indexOf(fc) + fc.length);
+      const fc3 = inferColorCode(fRest + n);
+      if (fc3) return ("20-" + fNum + fc3).toUpperCase();
+      return ("20-" + fNum).toUpperCase();
+    }
+  }
   // 20- 없는 견출지 추론: 숫자+색상 패턴 → 20- (문자열 어디서나)
   const labelGuessM = n.match(/([A-Za-z]{0,2}\d{2,4}[A-Za-z]?)/);
   if (labelGuessM) {
