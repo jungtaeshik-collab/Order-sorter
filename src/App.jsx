@@ -427,6 +427,8 @@ function getPetitCode(name, skuId) {
     .trim();
 
   const isMasking = /마스킹/i.test(n);
+  // 아래 키워드가 있으면 20- 견출지로 인식
+  const isLabel20 = /보호필름라벨|보호필름|인덱스라벨|칼라분류용|크라프트라벨|냉장고라벨|무지견출지|일반견출지|유광견출지별|유광별라벨|모서리스티커|눈알스티커/i.test(n.replace(/\s/g,""));
 
   // 스티커: DA, PD, TS
   const stickerM = n.match(/\b(DA\d+[\w-]*|PD\d+[\w-]*|TS\d+[\w-]*)/i);
@@ -526,7 +528,7 @@ function getPetitCode(name, skuId) {
     const rest = n.slice(n.indexOf(candidate) + candidate.length);
     const colorCode2 = inferColorCode(rest + n);
     if (colorCode2) return ("20-" + numPart + colorCode2).toUpperCase();
-    if (numPart.length >= 2) return ("20-" + numPart).toUpperCase();
+    if (isLabel20 || numPart.length >= 2) return ("20-" + numPart).toUpperCase();
   }
 
   // OPM-, DT, HR (fallback)
