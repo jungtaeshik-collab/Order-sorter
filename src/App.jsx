@@ -191,6 +191,10 @@ const SKU_ID_MAP = {
   "64312192": "아크릴 홀더 검정 1단",
   "64312193": "아크릴 홀더 흰색 1단",
 };
+// 쁘띠 SKU ID → 강제 품목코드
+const PETIT_SKU_CODE_MAP = {
+  "8245985": "20-T301",
+};
 
 // SKU ID → 강제 개입수 (브랜드 공통)
 const SKU_ID_PACK_QTY = {
@@ -215,13 +219,16 @@ const SKU_ID_PACK_QTY = {
   "3679729":3,"3679728":3,"3679727":3,"3679726":3,"3267274":3,
   "6561021":3,"6560993":3,"6560999":3,"6561031":3,"6561078":3,"6561115":3,"6561044":3,"6561025":3,"6561122":3,"6560977":3,"6561080":3,"6560974":3,"6560976":3,"6561028":3,"6561024":3,"18314410":3,"6561092":3,"6561081":3,"6561094":3,"6561097":3,"6561098":3,"6561079":3,"6560982":3,"6560988":3,"6560995":3,"6560997":3,"6561029":3,"6561032":3,"6561039":3,"6561040":3,"6561041":3,"6561043":3,"6561045":3,"6561047":3,"6561048":3,"6561049":3,"6561083":3,"6561102":3,"6561104":3,"6561106":3,"6561109":3,"6965227":3,"6561110":3,"6560979":3,"6561117":3,"6561119":3,"6561105":3,"6561037":3,"6561108":3,"6561001":3,"6561103":3,"6561118":3,
   "6561113":3,"3043883":3,"6560990":3,"20283296":3,
+  "6560980":3,"6561008":3,"6561112":3,"20283298":3,"6560978":3,"3043882":3,
   // 4개입
   "8245967":4,"8245986":4,"8245974":4,"8245993":4,"8245977":4,
   "3043880":4,"3043870":4,"3043869":4,"24301123":4,"17906742":4,
-  "10155526":4,"11712157":4,
+  "10155526":4,"11712157":4,"17257862":4,
   "18314428":4,"17257844":4,"18501375":4,"17257850":4,"17257863":4,
   // 5개입
   "24301125":5,"18501380":5,"18501374":5,"18501385":5,"20283299":5,"20283318":5,
+  "20283317":5,"18314424":5,"18314451":5,"18501379":5,"18314419":5,"18314430":5,
+  "18501364":5,"17257834":5,"20283322":5,"17257841":5,"17257852":5,
   "17257847":5,"17257856":5,"17257857":5,"18314418":5,"18314427":5,"18501343":5,"18501369":5,"18501378":5,"18501381":5,"18501383":5,"17257864":5,"18314407":5,"18314417":5,"18314436":5,"18314458":5,
   // 6개입
   "18501377":6,"10467740":6,"10467741":6,"10467755":6,"10467737":6,"10467728":6,"10467757":6,
@@ -401,60 +408,75 @@ function getPetitEtcGroup(name) {
   return 4;
 }
 
-function getPetitCode(name) {
+function getPetitCode(name, skuId) {
   if (!name) return null;
-  // Pack_ 제거, 's 제거, ver 제거
+  // PETIT SKU ID 강제 코드 매핑
+  if (skuId && PETIT_SKU_CODE_MAP[String(skuId).trim()]) {
+    return PETIT_SKU_CODE_MAP[String(skuId).trim()].toUpperCase();
+  }
   let n = name
     .replace(/Pack_?/gi, "")
     .replace(/_/g, "")
     .replace(/'s/gi, "").replace(/\u2019s/gi, "")
     .replace(/ver\.?\d+/gi, "").replace(/v\.?\d+(?=\s|$|\))/gi, "")
+    .replace(/\b\d{1,2}[pP]\b/g, "")  // 20P, 5P 등 무시
     .trim();
 
-  // 스티커: DA, PD, TS 코드 (견출지보다 먼저 체크)
+  // 스티커: DA, PD, TS
   const stickerM = n.match(/\b(DA\d+[\w-]*|PD\d+[\w-]*|TS\d+[\w-]*)/i);
   if (stickerM) return stickerM[1].toUpperCase();
 
-  // 견출지: 20- 포함 코드 추출 (색상까지 포함)
-  // 패턴: 20-xxx(색상) 또는 20-xxx색상(한글) 또는 20-xxxENG코드
+  // 견출지: 20- 코드 추출 (A suffix 포함하여 base 유지)
   const labelFullM = n.match(/\b(20-[A-Za-z]?\d+[A-Za-z]*)(\([^)]+\)|[가-힣]+)?/i);
   if (labelFullM) {
-    const base = labelFullM[1].toUpperCase();
+    const base = labelFullM[1].toUpperCase(); // 예: 20-306A, 20-403G, 20-101
     const colorPart = labelFullM[2] || "";
-    // 뒤에 영문 색상코드가 base 끝에 붙어있는 경우 (20-403G)
-    const engColorM = base.match(/^(20-[A-Za-z]?\d+)([A-Z]{1,3})$/i);
-    if (engColorM) {
-      const inferredColor = inferColorCode(engColorM[2]);
-      if (inferredColor) return (engColorM[1] + inferredColor).toUpperCase();
-      return base;
+    // base 끝이 단순 알파벳 1자인 경우 (20-403G, 20-306A 등)
+    const engSuffix = base.match(/^(20-[A-Za-z]?\d+)([A-Z])$/i);
+    if (engSuffix) {
+      const suffix = engSuffix[2].toUpperCase();
+      if (suffix === "A") {
+        // A = 혼합: 20-306A 그대로 유지 (마스터에 20-306A(5색) 형태로 존재)
+        // 뒤에 색상이 더 있으면 추가
+        const extraColor = inferColorCode(colorPart + n.slice(n.indexOf(base) + base.length));
+        return extraColor ? (base + extraColor).toUpperCase() : base;
+      } else {
+        // 다른 영문 코드 (G, R, B 등) → 색상 변환
+        const inferredColor = inferColorCode(suffix);
+        if (inferredColor) return (engSuffix[1] + inferredColor).toUpperCase();
+      }
     }
-    // 괄호 색상 또는 한글 색상 붙어있는 경우
+    // 괄호 색상 또는 한글 색상
     if (colorPart) {
       const inferredColor = inferColorCode(colorPart);
       if (inferredColor) return (base + inferredColor).toUpperCase();
       return (base + colorPart).toUpperCase();
     }
+    // base 뒤에 한글 색상이 바로 붙어있는 경우 (20-F201적색)
+    const afterBase = n.slice(n.toUpperCase().indexOf(base) + base.length);
+    const afterColor = inferColorCode(afterBase);
+    if (afterColor) return (base + afterColor).toUpperCase();
     return base;
   }
 
-  // OPM-, DT, HR 코드
+  // OPM-, DT, HR
   const otherLabelM = n.match(/\b(OPM-[A-Za-z0-9]+|DT\d+|HR\d+)/i);
   if (otherLabelM) return otherLabelM[1].toUpperCase();
 
-  // 20- 없는 견출지 추론: 숫자+색상 → 20-번호+색상
+  // 20- 없는 견출지 추론
   const labelGuessM = n.match(/^(?:[^\w]*)([A-Za-z]{0,2}\d{2,4})(.*)/);
   if (labelGuessM) {
     const numPart = labelGuessM[1];
     const rest = labelGuessM[2] || "";
-    // rest 끝의 영문 색상코드 또는 한글 색상
-    const engM = rest.match(/([A-Z]{1,3})$/i);
     let colorCode = inferColorCode(rest + n);
-    if (!colorCode && engM) colorCode = inferColorCode(engM[1]);
+    if (!colorCode) {
+      const em = rest.match(/([A-Z]{1,3})$/i);
+      if (em) colorCode = inferColorCode(em[1]);
+    }
     if (colorCode) return ("20-" + numPart + colorCode).toUpperCase();
     if (numPart.length >= 2) return ("20-" + numPart).toUpperCase();
   }
 
-  // 일반 코드 (X5, X6 제외)
   const codes = n.match(/[A-Za-z]{2,}\d{2,}[\w.-]*/g);
   return codes ? codes[0].toUpperCase() : null;
 }
@@ -513,7 +535,7 @@ function processPetit(merged, masterCodes) {
     const nameStr = row[2] != null ? String(row[2]).trim() : "";
     if (!nameStr || /^\d+$/.test(nameStr)) return;
     const skuId = row[1] != null ? Number(row[1]) : 0;
-    const code = getPetitCode(nameStr);
+    const code = getPetitCode(nameStr, skuIdStr);
     const category = getPetitCategory(code, nameStr);
     let catGroup, subGroup;
     if (category === "스티커") {
