@@ -64,13 +64,24 @@ function findRankExact(name, index) {
 // 색상 별칭 정규화 (매칭용)
 function normalizeColorAlias(s) {
   return s
-    .replace(/파랑/g,"청색").replace(/블루/g,"청색").replace(/BLUE/gi,"청색")
-    .replace(/빨강/g,"적색").replace(/레드/g,"적색").replace(/RED/gi,"적색")
-    .replace(/검정/g,"흑색").replace(/블랙/g,"흑색").replace(/BLACK/gi,"흑색")
-    .replace(/흰색/g,"백색").replace(/화이트/g,"백색").replace(/WHITE/gi,"백색")
-    .replace(/노랑/g,"황색").replace(/옐로/g,"황색").replace(/YELLOW/gi,"황색")
-    .replace(/초록/g,"녹색").replace(/그린/g,"녹색").replace(/GREEN/gi,"녹색")
-    .replace(/X\d+/gi,"")  // X5, X4 등 무시
+    // 형광 계열 (일반 색상보다 먼저)
+    .replace(/형광녹색|형광그린/g,"FG")
+    .replace(/형광노랑|형광황색/g,"FL")
+    .replace(/형광핑크|형광분홍/g,"FP")
+    .replace(/형광주황|형광오렌지/g,"FO")
+    // 일반 색상 → 영문 단자 통일
+    .replace(/적색|빨강|빨간/g,"R")
+    .replace(/청색|파랑|파란/g,"B")
+    .replace(/녹색|초록|초록색/g,"G")
+    .replace(/황색|노랑|노란/g,"Y")
+    .replace(/혼합/g,"A")
+    .replace(/흑색|검정|블랙/g,"K")
+    .replace(/백색|흰색|화이트/g,"W")
+    .replace(/블루/g,"B").replace(/BLUE/gi,"B")
+    .replace(/레드/g,"R").replace(/RED/gi,"R")
+    .replace(/그린/g,"G").replace(/GREEN/gi,"G")
+    .replace(/옐로/g,"Y").replace(/YELLOW/gi,"Y")
+    .replace(/X\d+/gi,"")  // X5, X6 등 무시
     .replace(/ver\.?\d+/gi,"").replace(/v\.?\d+(?=\s|$|\))/gi,""); // ver 무시
 }
 function findRankFuzzy(name, masterCodes) {
@@ -391,13 +402,19 @@ function getPetitEtcGroup(name) {
 
 function getPetitCode(name) {
   if (!name) return null;
-  // 언더바, 's 무시하고 코드 추출 (멋쟁이팽귄's → 멋쟁이팽귄)
-  const n = name.replace(/_/g,"").replace(/'s/gi,"").replace(/’s/gi,"").replace(/ver\.?\d+/gi,"").replace(/v\.?\d+/gi,"");
-  const packM = n.match(/Pack_?([A-Za-z]{1,4}[\d][\w\-.]*)/i);
+  const n = name.replace(/_/g,"").replace(/'s/gi,"").replace(/\u2019s/gi,"")
+               .replace(/ver\.?\d+/gi,"").replace(/v\.?\d+(?=\s|$|\))/gi,"");
+  // Pack_ 코드
+  const packM = n.match(/Pack_?([A-Za-z]{1,4}\d[\w.-]*)/i);
   if (packM) return packM[1].toUpperCase();
-  const hyM = n.match(/([A-Za-z]{1,4})-(\d[\w\-]*)/);
-  if (hyM) return (hyM[1]+hyM[2]).toUpperCase();
-  const codes = n.match(/[A-Za-z]{1,4}[\d][\w\-.]*/g);
+  // 쁘띠견출지: 20-, OPM-, DT, HR 코드만
+  const labelM = n.match(/\b(20-[A-Za-z0-9]+|OPM-[A-Za-z0-9]+|DT\d+|HR\d+)/i);
+  if (labelM) return labelM[1].toUpperCase();
+  // 스티커: DA, PD, TS 코드
+  const stickerM = n.match(/\b(DA\d+[\w-]*|PD\d+[\w-]*|TS\d+[\w-]*)/i);
+  if (stickerM) return stickerM[1].toUpperCase();
+  // 일반 (X5, X6 같은 단순코드 제외 - 영문 2자 이상 + 숫자 2자리 이상)
+  const codes = n.match(/[A-Za-z]{2,}\d{2,}[\w.-]*/g);
   return codes ? codes[0].toUpperCase() : null;
 }
 
