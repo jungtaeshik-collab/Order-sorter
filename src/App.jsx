@@ -635,60 +635,52 @@ function buildPetitExcel(processed) {
   });
   XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
 
-  // 시트2: 품목코드 기준, 같은 코드 내 SKU ID별 분리
-  // codeMap: { code → { skuMap: { skuId → {qty, count, skuName} }, catGroup, subGroup, sortNum } }
+  // 시트2: 품목코드 기준, 모든 SKU ID별 행 표시 + 개입수 포함
   const codeMap = {}, noQtyMap2 = {};
   processed.forEach((item) => {
     const key = item.code || String(item.row[2]||"").trim();
     if (!key) return;
     const skuId = String(item.row[1]||"").trim();
     const skuName = String(item.row[2]||"").trim();
+    const packQty = item.packQty;
     if (item.noQty) {
-      if (!noQtyMap2[key]) noQtyMap2[key] = { catGroup:item.catGroup, subGroup:item.subGroup, sortNum:item.sortNum, count:0 };
-      noQtyMap2[key].count += 1;
+      if (!noQtyMap2[key]) noQtyMap2[key] = { catGroup:item.catGroup, subGroup:item.subGroup, sortNum:item.sortNum, entries:[] };
+      noQtyMap2[key].entries.push({ skuId, skuName, packQty, count:1 });
     } else {
       if (!codeMap[key]) codeMap[key] = { catGroup:item.catGroup, subGroup:item.subGroup, sortNum:item.sortNum, skuMap:{} };
       const sm = codeMap[key].skuMap;
-      if (!sm[skuId]) sm[skuId] = { qty:0, count:0, skuName };
+      if (!sm[skuId]) sm[skuId] = { qty:0, count:0, skuName, packQty };
       const q = item.total!=null ? item.total : (item.row[4]!=null ? Number(item.row[4]) : 0);
       sm[skuId].qty += q;
       sm[skuId].count += 1;
     }
   });
-  const ws2Data = [["품목코드","발주수량(합계)","행수","SKU 이름"]];
+  // A=품목코드, B=발주수량합계, C=개입수, D=행수, E=SKU이름
+  const ws2Data = [["품목코드","발주수량(합계)","개입수","행수","SKU 이름"]];
   // 수량 미확인
   const noQtyE = Object.entries(noQtyMap2).sort(([,a],[,b])=>a.catGroup-b.catGroup||a.subGroup-b.subGroup||a.sortNum-b.sortNum);
   if (noQtyE.length>0) {
-    ws2Data.push(["⚠ 수량 미확인","","",""]);
-    noQtyE.forEach(([key,s])=>ws2Data.push([key,"확인필요",s.count,""]));
+    ws2Data.push(["⚠ 수량 미확인","","","",""]);
+    noQtyE.forEach(([key,s])=>{
+      s.entries.forEach(e=>ws2Data.push([key,"확인필요",e.packQty||"",1,e.skuName]));
+    });
   }
   // 품목코드별 정렬
   const sumRows = Object.entries(codeMap).sort(([,a],[,b])=>a.catGroup-b.catGroup||a.subGroup-b.subGroup||a.sortNum-b.sortNum);
   let cc=-1, cs=-1;
   sumRows.forEach(([key,s])=>{
-    if(s.catGroup!==cc||s.subGroup!==cs){cc=s.catGroup;cs=s.subGroup;ws2Data.push([`▶ ${PETIT_CAT_LABELS[s.catGroup]}`,"","",""]);}
+    if(s.catGroup!==cc||s.subGroup!==cs){cc=s.catGroup;cs=s.subGroup;ws2Data.push([`▶ ${PETIT_CAT_LABELS[s.catGroup]}`,"","","",""]);}
     const skuEntries = Object.entries(s.skuMap).sort(([a],[b])=>Number(a)-Number(b));
-    if (skuEntries.length === 1) {
-      // SKU ID 1개: 품목코드만 표시
-      const [, sv] = skuEntries[0];
-      ws2Data.push([key, sv.qty, sv.count, ""]);
-    } else {
-      // SKU ID 여러개: 품목코드 합계 먼저
-      const totalQty = skuEntries.reduce((s,[,v])=>s+v.qty,0);
-      const totalCnt = skuEntries.reduce((s,[,v])=>s+v.count,0);
-      ws2Data.push([key, totalQty, totalCnt, ""]);
-      // SKU ID별 상세
-      skuEntries.forEach(([skuId, sv])=>{
-        ws2Data.push(["", sv.qty, sv.count, sv.skuName]);
-      });
-    }
+    skuEntries.forEach(([skuId, sv])=>{
+      ws2Data.push([key, sv.qty, sv.packQty||"", sv.count, sv.skuName]);
+    });
   });
   const totalCount = Object.values(codeMap).reduce((s,v)=>s+Object.values(v.skuMap).reduce((a,b)=>a+b.count,0),0)
-                   + Object.values(noQtyMap2).reduce((s,v)=>s+v.count,0);
+                   + Object.values(noQtyMap2).reduce((s,v)=>s+v.entries.length,0);
   const totalQty = Object.values(codeMap).reduce((s,v)=>s+Object.values(v.skuMap).reduce((a,b)=>a+b.qty,0),0);
-  ws2Data.push(["▶ 합계",totalQty,totalCount,""]);
+  ws2Data.push(["▶ 합계",totalQty,"",totalCount,""]);
   const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
-  ws2["!cols"] = [{wch:20},{wch:14},{wch:6},{wch:50}];
+  ws2["!cols"] = [{wch:18},{wch:14},{wch:8},{wch:6},{wch:55}];
   XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
   XLSX.writeFile(wb, "발주정렬결과_쁘띠팬시.xlsx");
 }
