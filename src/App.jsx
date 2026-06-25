@@ -220,21 +220,25 @@ const SKU_ID_PACK_QTY = {
   "6561021":3,"6560993":3,"6560999":3,"6561031":3,"6561078":3,"6561115":3,"6561044":3,"6561025":3,"6561122":3,"6560977":3,"6561080":3,"6560974":3,"6560976":3,"6561028":3,"6561024":3,"18314410":3,"6561092":3,"6561081":3,"6561094":3,"6561097":3,"6561098":3,"6561079":3,"6560982":3,"6560988":3,"6560995":3,"6560997":3,"6561029":3,"6561032":3,"6561039":3,"6561040":3,"6561041":3,"6561043":3,"6561045":3,"6561047":3,"6561048":3,"6561049":3,"6561083":3,"6561102":3,"6561104":3,"6561106":3,"6561109":3,"6965227":3,"6561110":3,"6560979":3,"6561117":3,"6561119":3,"6561105":3,"6561037":3,"6561108":3,"6561001":3,"6561103":3,"6561118":3,
   "6561113":3,"3043883":3,"6560990":3,"20283296":3,
   "6560980":3,"6561008":3,"6561112":3,"20283298":3,"6560978":3,"3043882":3,
+  "20283288":3,"6548989":3,"20283303":3,"3043881":3,"3043885":3,"6561027":3,"6560998":3,
   // 4개입
   "8245967":4,"8245986":4,"8245974":4,"8245993":4,"8245977":4,
   "3043880":4,"3043870":4,"3043869":4,"24301123":4,"17906742":4,
   "10155526":4,"11712157":4,"17257862":4,
   "18314428":4,"17257844":4,"18501375":4,"17257850":4,"17257863":4,
+  "17257849":4,
   // 5개입
   "24301125":5,"18501380":5,"18501374":5,"18501385":5,"20283299":5,"20283318":5,
   "20283317":5,"18314424":5,"18314451":5,"18501379":5,"18314419":5,"18314430":5,
   "18501364":5,"17257834":5,"20283322":5,"17257841":5,"17257852":5,
   "17257847":5,"17257856":5,"17257857":5,"18314418":5,"18314427":5,"18501343":5,"18501369":5,"18501378":5,"18501381":5,"18501383":5,"17257864":5,"18314407":5,"18314417":5,"18314436":5,"18314458":5,
+  "18314414":5,"18314437":5,"18314449":5,"18501368":5,"18314443":5,"20283324":5,"18314442":5,"18314461":5,"17257865":5,
   // 6개입
   "18501377":6,"10467740":6,"10467741":6,"10467755":6,"10467737":6,"10467728":6,"10467757":6,
   "10467734":6,"10467735":6,"10467753":6,"13404787":6,
   "24301126":6,"24301122":6,"10467758":6,"10467727":6,"10467746":6,"10467732":6,
   "18314420":6,"18501341":6,"18501344":6,"18501351":6,
+  "18314453":6,"18314416":6,"18314435":6,"18314450":6,"18501355":6,"20283315":6,
 };
 
 function getFloemCode(name) {
@@ -419,63 +423,115 @@ function getPetitCode(name, skuId) {
     .replace(/_/g, "")
     .replace(/'s/gi, "").replace(/\u2019s/gi, "")
     .replace(/ver\.?\d+/gi, "").replace(/v\.?\d+(?=\s|$|\))/gi, "")
-    .replace(/\b\d{1,2}[pP]\b/g, "")  // 20P, 5P 등 무시
+    .replace(/\b\d{1,2}[pP]\b/g, "")
     .trim();
+
+  const isMasking = /마스킹/i.test(n);
 
   // 스티커: DA, PD, TS
   const stickerM = n.match(/\b(DA\d+[\w-]*|PD\d+[\w-]*|TS\d+[\w-]*)/i);
   if (stickerM) return stickerM[1].toUpperCase();
 
-  // 견출지: 20- 코드 추출 (A suffix 포함하여 base 유지)
-  const labelFullM = n.match(/\b(20-[A-Za-z]?\d+[A-Za-z]*)(\([^)]+\)|[가-힣]+)?/i);
+  // OPM 코드: 명시적 OPM- 또는 마스킹 키워드
+  const opmM = n.match(/\b(OPM-[A-Za-z0-9]+)/i);
+  if (opmM) return opmM[1].toUpperCase();
+
+  // 마스킹 키워드 → OPM 코드 추론 (M, L, R, S, V, BK 계열)
+  if (isMasking) {
+    // 숫자+A 패턴: M306A, L301A 등
+    const opmGuess = n.match(/\b([A-Z]{1,3}\d{3}[A-Za-z]*)\b/i);
+    if (opmGuess) return ("OPM-" + opmGuess[1]).toUpperCase();
+    // 숫자만 있는 경우
+    const numOnly = n.match(/\b(\d{3}[A-Za-z]*)\b/);
+    if (numOnly) return ("OPM-M" + numOnly[1]).toUpperCase();
+  }
+
+  // 20- 코드 추출 (색상 포함)
+  const labelFullM = n.match(/\b(20-[A-Za-z]*\d+[A-Za-z]*)(\([^)]+\)|[가-힣]+[A-Za-z]*)?/i);
   if (labelFullM) {
-    const base = labelFullM[1].toUpperCase(); // 예: 20-306A, 20-403G, 20-101
+    const base = labelFullM[1].toUpperCase();
     const colorPart = labelFullM[2] || "";
-    // base 끝이 단순 알파벳 1자인 경우 (20-403G, 20-306A 등)
-    const engSuffix = base.match(/^(20-[A-Za-z]?\d+)([A-Z])$/i);
+    // base 끝이 영문 1자 (20-403G, 20-355A 등)
+    const engSuffix = base.match(/^(20-[A-Za-z]*\d+)([A-Z])$/i);
     if (engSuffix) {
       const suffix = engSuffix[2].toUpperCase();
       if (suffix === "A") {
-        // A = 혼합: 20-306A 그대로 유지 (마스터에 20-306A(5색) 형태로 존재)
-        // 뒤에 색상이 더 있으면 추가
-        const extraColor = inferColorCode(colorPart + n.slice(n.indexOf(base) + base.length));
+        // A = 혼합/5색 계열: 20-355A 그대로 유지
+        const extraColor = inferColorCode(colorPart);
         return extraColor ? (base + extraColor).toUpperCase() : base;
       } else {
-        // 다른 영문 코드 (G, R, B 등) → 색상 변환
+        // G, R, B 등 색상코드
         const inferredColor = inferColorCode(suffix);
         if (inferredColor) return (engSuffix[1] + inferredColor).toUpperCase();
       }
     }
-    // 괄호 색상 또는 한글 색상
+    // base 끝에 영문 2자 이상 (GD, SL 등) - 20-HR355GD
+    const eng2Suffix = base.match(/^(20-[A-Za-z]*\d+)([A-Z]{2,3})$/i);
+    if (eng2Suffix) {
+      const inferred = inferColorCode(eng2Suffix[2]);
+      if (inferred) return (eng2Suffix[1] + inferred).toUpperCase();
+    }
     if (colorPart) {
       const inferredColor = inferColorCode(colorPart);
       if (inferredColor) return (base + inferredColor).toUpperCase();
       return (base + colorPart).toUpperCase();
     }
-    // base 뒤에 한글 색상이 바로 붙어있는 경우 (20-F201적색)
+    // base 바로 뒤에 한글 색상 (20-HR352녹색)
     const afterBase = n.slice(n.toUpperCase().indexOf(base) + base.length);
     const afterColor = inferColorCode(afterBase);
     if (afterColor) return (base + afterColor).toUpperCase();
     return base;
   }
 
-  // OPM-, DT, HR
-  const otherLabelM = n.match(/\b(OPM-[A-Za-z0-9]+|DT\d+|HR\d+)/i);
-  if (otherLabelM) return otherLabelM[1].toUpperCase();
-
-  // 20- 없는 견출지 추론
-  const labelGuessM = n.match(/^(?:[^\w]*)([A-Za-z]{0,2}\d{2,4})(.*)/);
-  if (labelGuessM) {
-    const numPart = labelGuessM[1];
-    const rest = labelGuessM[2] || "";
-    let colorCode = inferColorCode(rest + n);
-    if (!colorCode) {
-      const em = rest.match(/([A-Z]{1,3})$/i);
-      if (em) colorCode = inferColorCode(em[1]);
+  // HR 코드: HR301A, HR352녹색 등 → 20-HR로 변환
+  const hrM = n.match(/\b(HR\d+[A-Za-z]*)([가-힣]*)/i);
+  if (hrM) {
+    const hrBase = "20-" + hrM[1].toUpperCase();
+    const hrColor = hrM[2] || "";
+    const engSuf = hrM[1].match(/\d+([A-Za-z]+)$/i);
+    if (engSuf) {
+      const suf = engSuf[1].toUpperCase();
+      if (suf === "A") return hrBase; // 20-HR301A 그대로
+      const c = inferColorCode(suf);
+      if (c) return ("20-" + hrM[1].replace(/[A-Za-z]+$/, "") + c).toUpperCase();
     }
-    if (colorCode) return ("20-" + numPart + colorCode).toUpperCase();
+    if (hrColor) {
+      const c = inferColorCode(hrColor);
+      if (c) return (hrBase.replace(/[A-Za-z]+$/, "") + c).toUpperCase();
+      return (hrBase + hrColor).toUpperCase();
+    }
+    return hrBase;
+  }
+
+  // OPM 없는 OPM계열 코드: 영문+숫자+A (M306A, L301A 등)
+  const opmLikeM = n.match(/\b([A-Z]{1,3}\d{3}[A-Z])\b/i);
+  if (opmLikeM) return ("OPM-" + opmLikeM[1]).toUpperCase();
+
+  // 20- 없는 견출지 추론: 숫자+색상 패턴 → 20- (문자열 어디서나)
+  const labelGuessM = n.match(/([A-Za-z]{0,2}\d{2,4}[A-Za-z]?)/);
+  if (labelGuessM) {
+    const candidate = labelGuessM[1];
+    // 숫자 부분과 접미사(색상코드) 분리
+    const numMatch = candidate.match(/^([A-Za-z]{0,2}\d{2,4})([A-Za-z]{0,3})$/);
+    const numPart = numMatch ? numMatch[1] : candidate;
+    const suffix = numMatch ? numMatch[2].toUpperCase() : "";
+    // A = 혼합/5색: 20-숫자A 그대로
+    if (suffix === "A") return ("20-" + numPart + "A").toUpperCase();
+    // 색상 영문코드 (BL, GD, FO, BK 등)
+    if (suffix) {
+      const colorCode = inferColorCode(suffix);
+      if (colorCode) return ("20-" + numPart + colorCode).toUpperCase();
+    }
+    // 나머지 텍스트에서 색상 찾기
+    const rest = n.slice(n.indexOf(candidate) + candidate.length);
+    const colorCode2 = inferColorCode(rest + n);
+    if (colorCode2) return ("20-" + numPart + colorCode2).toUpperCase();
     if (numPart.length >= 2) return ("20-" + numPart).toUpperCase();
   }
+
+  // OPM-, DT, HR (fallback)
+  const otherM = n.match(/\b(DT\d+|HR\d+)/i);
+  if (otherM) return otherM[1].toUpperCase();
 
   const codes = n.match(/[A-Za-z]{2,}\d{2,}[\w.-]*/g);
   return codes ? codes[0].toUpperCase() : null;
@@ -488,7 +544,7 @@ const ENG_COLOR_MAP = {
   "R":"(적색)", "BL":"(청색)", "B":"(청색)",
   "G":"(녹색)", "Y":"(노랑)", "A":"(혼합)",
   "BK":"(검정)", "K":"(검정)", "W":"(흰색)",
-  "SL":"(은색)",
+  "SL":"(은색)", "SV":"(은색)", "GD":"(금색)",
 };
 function inferColorCode(s) {
   // 형광 한글
@@ -511,7 +567,8 @@ function inferColorCode(s) {
   if (/분홍|핑크/.test(s)) return "(분홍)";
   if (/보라/.test(s)) return "(보라)";
   if (/투명/.test(s)) return "(투명)";
-  if (/은색|실버/.test(s)) return "(은색)";
+  if (/은색|실버|\bSL\b|\bSV\b/.test(s)) return "(은색)";
+  if (/금색|골드|\bGD\b/.test(s)) return "(금색)";
   if (/금색|골드/.test(s)) return "(금색)";
   // 영문 코드: 문자열 끝에 오는 영문만 (FO, BL, BK, R, B, G 등)
   const engM = s.match(/([A-Z]{1,3})$/i);
