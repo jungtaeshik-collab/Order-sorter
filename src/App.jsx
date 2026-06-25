@@ -580,6 +580,62 @@ function buildFloemExcel(processed) {
   const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
   ws2["!cols"] = [{wch:30},{wch:16},{wch:8}];
   XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
+
+  // 시트3: 개입수별 합계
+  const packMap3 = {};
+  processed.forEach((item) => {
+    if (item.noQty) return;
+    const pq = item.packQty;
+    if (!pq) return;
+    if (!packMap3[pq]) packMap3[pq] = { totalQty:0, totalCount:0, codeMap:{} };
+    const key = item.displayName || item.code || String(item.row[2]||"").trim();
+    const skuId = String(item.row[1]||"").trim();
+    const skuName = String(item.row[2]||"").trim();
+    const pm = packMap3[pq];
+    const ckey = key + "_" + skuId;
+    if (!pm.codeMap[ckey]) pm.codeMap[ckey] = { code:key, skuName, qty:0, count:0, skuId };
+    const q = item.total!=null ? item.total : (item.row[4]!=null ? Number(item.row[4]) : 0);
+    pm.codeMap[ckey].qty += q;
+    pm.codeMap[ckey].count += 1;
+    pm.totalQty += q;
+    pm.totalCount += 1;
+  });
+
+  const ws3Data = [["개입수","품목코드","발주수량(합계)","행수","SKU 이름"]];
+  [1,2,3,4,5,6,7,8,9,10].forEach((pq) => {
+    const pm = packMap3[pq];
+    if (!pm) return;
+    ws3Data.push([`▶ ${pq}개입 (총 ${pm.totalQty}개 / ${pm.totalCount}행)`,"","","",""]);
+    Object.values(pm.codeMap)
+      .sort((a,b) => a.code.localeCompare(b.code) || Number(a.skuId)-Number(b.skuId))
+      .forEach(v => {
+        ws3Data.push(["", v.code, v.qty, v.count, v.skuName]);
+      });
+  });
+  const noPackItems3 = processed.filter(x => !x.noQty && !x.packQty);
+  if (noPackItems3.length > 0) {
+    ws3Data.push(["▶ 개입수 미확인","","","",""]);
+    noPackItems3.forEach(item => {
+      const key = item.displayName || item.code || String(item.row[2]||"").trim();
+      const q = item.row[4]!=null ? Number(item.row[4]) : 0;
+      ws3Data.push(["", key, q, 1, String(item.row[2]||"")]);
+    });
+  }
+
+  const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
+  ws3["!cols"] = [{wch:30},{wch:18},{wch:14},{wch:6},{wch:55}];
+  const yFill3 = { patternType:"solid", fgColor:{ rgb:"FFE500" } };
+  ws3Data.forEach((row, ri) => {
+    const v = row[0] != null ? String(row[0]) : "";
+    if (v.startsWith("▶")) {
+      for (let c = 0; c < 5; c++) {
+        const addr = XLSX.utils.encode_cell({ r:ri, c });
+        if (!ws3[addr]) ws3[addr] = { t:"s", v: c===0?v:"" };
+        ws3[addr].s = { fill:yFill3, font:{ bold:true } };
+      }
+    }
+  });
+  XLSX.utils.book_append_sheet(wb, ws3, "개입수별 합계");
   XLSX.writeFile(wb, "발주정렬결과_플로엠.xlsx");
 }
 
