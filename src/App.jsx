@@ -785,39 +785,49 @@ function buildFloemExcel(processed) {
     const key = item.displayName || item.code || String(item.row[2]||"").trim();
     const skuId = String(item.row[1]||"").trim();
     const skuName = String(item.row[2]||"").trim();
+    const barcode = item.row[3] != null ? String(item.row[3]) : "";
+    const orderQty = item.row[4] != null ? Number(item.row[4]) : 0;
+    const barcodeQtyRaw = pq > 0 ? orderQty / pq : orderQty;
+    const barcodeQty = (pq > 0 && orderQty % pq === 0) ? barcodeQtyRaw : null; // 안나눠지면 null
     const pm = packMap3[pq];
     const ckey = key + "_" + skuId;
-    if (!pm.codeMap[ckey]) pm.codeMap[ckey] = { code:key, skuName, qty:0, count:0, skuId };
-    const q = item.total!=null ? item.total : (item.row[4]!=null ? Number(item.row[4]) : 0);
+    if (!pm.codeMap[ckey]) pm.codeMap[ckey] = { code:key, skuName, qty:0, count:0, skuId, barcode, barcodeQty:0, hasError:false };
+    const q = item.total!=null ? item.total : orderQty;
     pm.codeMap[ckey].qty += q;
     pm.codeMap[ckey].count += 1;
+    if (barcodeQty === null) { pm.codeMap[ckey].hasError = true; }
+    else { pm.codeMap[ckey].barcodeQty += barcodeQty; }
     pm.totalQty += q;
     pm.totalCount += 1;
   });
 
-  const ws3Data = [["개입수","품목코드","발주수량(합계)","행수","SKU 이름"]];
+  const ws3Data = [["개입수","품목코드","발주수량(합계)","SKU 이름","SKU Barcode","바코드수량"]];
   [1,2,3,4,5,6,7,8,9,10].forEach((pq) => {
     const pm = packMap3[pq];
     if (!pm) return;
-    ws3Data.push([`▶ ${pq}개입 (총 ${pm.totalQty}개 / ${pm.totalCount}행)`,"","","",""]);
-    Object.values(pm.codeMap)
-      .sort((a,b) => a.code.localeCompare(b.code) || Number(a.skuId)-Number(b.skuId))
-      .forEach(v => {
-        ws3Data.push(["", v.code, v.qty, v.count, v.skuName]);
+    ws3Data.push([`▶ ${pq}개입 (총 ${pm.totalQty}개 / ${pm.totalCount}행)`,"","","","","",""]);
+    const entries = Object.values(pm.codeMap)
+      .sort((a,b) => {
+        if (a.hasError !== b.hasError) return a.hasError ? -1 : 1; // 오류 먼저
+        return a.code.localeCompare(b.code) || Number(a.skuId)-Number(b.skuId);
       });
+    entries.forEach(v => {
+      const bqDisplay = v.hasError ? "⚠ 확인필요" : v.barcodeQty;
+      ws3Data.push(["", v.code, v.qty, v.skuName, v.barcode, bqDisplay]);
+    });
   });
   const noPackItems3 = processed.filter(x => !x.noQty && !x.packQty);
   if (noPackItems3.length > 0) {
-    ws3Data.push(["▶ 개입수 미확인","","","",""]);
-    noPackItems3.forEach(item => {
+    ws3Data.push(["▶ 개입수 미확인","","","","","","",""]);    noPackItems3.forEach(item => {
       const key = item.displayName || item.code || String(item.row[2]||"").trim();
       const q = item.row[4]!=null ? Number(item.row[4]) : 0;
-      ws3Data.push(["", key, q, 1, String(item.row[2]||"")]);
+      const bc3 = item.row[3] != null ? String(item.row[3]) : "";
+      ws3Data.push(["", key, q, String(item.row[2]||""), bc3, q]);
     });
   }
 
   const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
-  ws3["!cols"] = [{wch:30},{wch:18},{wch:14},{wch:6},{wch:55}];
+  ws3["!cols"] = [{wch:26},{wch:18},{wch:14},{wch:50},{wch:18},{wch:10}];
   const yFill3 = { patternType:"solid", fgColor:{ rgb:"FFE500" } };
   ws3Data.forEach((row, ri) => {
     const v = row[0] != null ? String(row[0]) : "";
@@ -919,7 +929,7 @@ function buildPetitExcel(processed) {
   const sumRows = Object.entries(codeMap).sort(([,a],[,b])=>a.catGroup-b.catGroup||a.subGroup-b.subGroup||a.sortNum-b.sortNum);
   let cc=-1, cs=-1;
   sumRows.forEach(([key,s])=>{
-    if(s.catGroup!==cc||s.subGroup!==cs){cc=s.catGroup;cs=s.subGroup;ws2Data.push([`▶ ${PETIT_CAT_LABELS[s.catGroup]}`,"","","",""]);}
+    if(s.catGroup!==cc||s.subGroup!==cs){cc=s.catGroup;cs=s.subGroup;ws2Data.push([`▶ ${PETIT_CAT_LABELS[s.catGroup]}`,"","","","",""]);}
     const skuEntries = Object.entries(s.skuMap).sort(([a],[b])=>Number(a)-Number(b));
     skuEntries.forEach(([skuId, sv])=>{
       ws2Data.push([key, sv.qty, sv.packQty||"", sv.count, sv.skuName]);
@@ -943,49 +953,59 @@ function buildPetitExcel(processed) {
     const key = item.code || String(item.row[2]||"").trim();
     const skuId = String(item.row[1]||"").trim();
     const skuName = String(item.row[2]||"").trim();
+    const barcode = item.row[3] != null ? String(item.row[3]) : "";
+    const orderQty = item.row[4] != null ? Number(item.row[4]) : 0;
+    const barcodeQtyRaw = pq > 0 ? orderQty / pq : orderQty;
+    const barcodeQty = (pq > 0 && orderQty % pq === 0) ? barcodeQtyRaw : null; // 안나눠지면 null
     const pm = packMap[pq];
     const ckey = key + "_" + skuId;
-    if (!pm.codeMap[ckey]) pm.codeMap[ckey] = { code:key, skuName, qty:0, count:0, skuId };
-    const q = item.total!=null ? item.total : (item.row[4]!=null ? Number(item.row[4]) : 0);
+    if (!pm.codeMap[ckey]) pm.codeMap[ckey] = { code:key, skuName, qty:0, count:0, skuId, barcode, barcodeQty:0, hasError:false };
+    const q = item.total!=null ? item.total : orderQty;
     pm.codeMap[ckey].qty += q;
     pm.codeMap[ckey].count += 1;
+    if (barcodeQty === null) { pm.codeMap[ckey].hasError = true; }
+    else { pm.codeMap[ckey].barcodeQty += barcodeQty; }
     pm.totalQty += q;
     pm.totalCount += 1;
   });
 
-  const ws3Data = [["개입수","품목코드","발주수량(합계)","행수","SKU 이름"]];
+  const ws3Data = [["개입수","품목코드","발주수량(합계)","SKU 이름","SKU Barcode","바코드수량"]];
   [1,2,3,4,5,6,7,8,9,10].forEach((pq) => {
     const pm = packMap[pq];
     if (!pm) return;
     // 섹션 헤더
-    ws3Data.push([`▶ ${pq}개입 (총 ${pm.totalQty}개 / ${pm.totalCount}행)`,"","","",""]);
+    ws3Data.push([`▶ ${pq}개입 (총 ${pm.totalQty}개 / ${pm.totalCount}행)`,"","","","","",""]);
     // 품목별 행
-    Object.values(pm.codeMap)
-      .sort((a,b) => a.code.localeCompare(b.code) || Number(a.skuId)-Number(b.skuId))
-      .forEach(v => {
-        ws3Data.push(["", v.code, v.qty, v.count, v.skuName]);
+    const entries = Object.values(pm.codeMap)
+      .sort((a,b) => {
+        if (a.hasError !== b.hasError) return a.hasError ? -1 : 1; // 오류 먼저
+        return a.code.localeCompare(b.code) || Number(a.skuId)-Number(b.skuId);
       });
+    entries.forEach(v => {
+      const bqDisplay = v.hasError ? "⚠ 확인필요" : v.barcodeQty;
+      ws3Data.push(["", v.code, v.qty, v.skuName, v.barcode, bqDisplay]);
+    });
   });
   // 개입수 없는 항목
   const noPackItems = processed.filter(x => !x.noQty && !x.packQty);
   if (noPackItems.length > 0) {
-    ws3Data.push(["▶ 개입수 미확인","","","",""]);
-    noPackItems.forEach(item => {
+    ws3Data.push(["▶ 개입수 미확인","","","","","","",""]);    noPackItems.forEach(item => {
       const key = item.code || String(item.row[2]||"").trim();
       const q = item.row[4]!=null ? Number(item.row[4]) : 0;
-      ws3Data.push(["", key, q, 1, String(item.row[2]||"")]);
+      const bc = item.row[3] != null ? String(item.row[3]) : "";
+      ws3Data.push(["", key, q, String(item.row[2]||""), bc, q]);
     });
   }
 
   const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
-  ws3["!cols"] = [{wch:30},{wch:18},{wch:14},{wch:6},{wch:55}];
+  ws3["!cols"] = [{wch:26},{wch:18},{wch:14},{wch:50},{wch:18},{wch:10}];
 
   // 섹션 헤더 노란색
   const yFill = { patternType:"solid", fgColor:{ rgb:"FFE500" } };
   ws3Data.forEach((row, ri) => {
     const v = row[0] != null ? String(row[0]) : "";
     if (v.startsWith("▶")) {
-      for (let c = 0; c < 5; c++) {
+      for (let c = 0; c < 6; c++) {
         const addr = XLSX.utils.encode_cell({ r:ri, c });
         if (!ws3[addr]) ws3[addr] = { t:"s", v: c===0?v:"" };
         ws3[addr].s = { fill:yFill, font:{ bold:true } };
