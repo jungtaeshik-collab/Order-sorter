@@ -1048,7 +1048,7 @@ export default function App() {
         const result = brand === "floem"
           ? processFloem(merged, masterCodes)
           : processPetit(merged, masterCodes);
-        const matched = result.filter(x => x.master).length;
+        const matched = result.filter(x => x.code).length;
         setStats({ total:result.length, matched, unmatched:result.length-matched });
         setProcessed(result);
         setStep("result");
@@ -1162,7 +1162,7 @@ export default function App() {
             </div>
             <div className="action-row">
               <button className="btn-download" onClick={()=> brand==="floem" ? buildFloemExcel(processed) : buildPetitExcel(processed)}>
-                ⬇ 엑셀 다운로드 (2시트)
+                ⬇ 엑셀 다운로드 (3시트)
               </button>
               <button className="btn-ghost" onClick={handleReset}>새 파일 처리</button>
             </div>
@@ -1198,7 +1198,7 @@ export default function App() {
                             <td className="td-center">{item.row[4]??"—"}</td>
                             <td className="td-center">{item.packQty??"—"}</td>
                             <td className="td-center bold">{item.total??"—"}</td>
-                            <td className="td-center"><span className={item.master?"badge-ok":"badge-ng"}>{item.master?"✓":"✗"}</span></td>
+                            <td className="td-center"><span className={(item.code||item.displayName)?"badge-ok":"badge-ng"}>{(item.code||item.displayName)?"✓":"✗"}</span></td>
                           </tr>
                         );
                         return rows;
