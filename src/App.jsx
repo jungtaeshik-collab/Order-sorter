@@ -428,8 +428,16 @@ function getPetitCode(name, skuId) {
 
   const isMasking = /마스킹/i.test(n);
   // 아래 키워드가 있으면 20- 견출지로 인식
-  const isLabel20 = /보호필름라벨|보호필름|인덱스라벨|칼라분류용|크라프트라벨|냉장고라벨|무지견출지|일반견출지|유광견출지별|유광별라벨|모서리스티커|눈알스티커/i.test(n.replace(/\s/g,""));
+  const isLabel20 = /보호필름라벨|보호필름|보호견출지|인덱스라벨|칼라분류용|크라프트라벨|냉장고라벨|무지견출지|일반견출지|유광견출지별|유광별라벨|모서리스티커|눈알스티커|투명봉인라벨|투명봉인|장식용라벨|장식용/i.test(n.replace(/\s/g,""));
 
+  // 스티커명찰: 색상 포함해서 반환
+  if (/스티커명찰/.test(n)) {
+    const nameColor = inferColorCode(n);
+    const sizeM = n.match(/대$/);
+    const size = sizeM ? "-대" : "";
+    if (nameColor) return ("스티커명찰" + nameColor + size).toUpperCase();
+    return "스티커명찰";
+  }
   // 스티커: DA, PD, TS
   const stickerM = n.match(/\b(DA\d+[\w-]*|PD\d+[\w-]*|TS\d+[\w-]*)/i);
   if (stickerM) return stickerM[1].toUpperCase();
@@ -511,7 +519,7 @@ function getPetitCode(name, skuId) {
 
   // isLabel20: 20- 없어도 20-로 강제 인식 (20- 또는 HR이 이미 있으면 스킵)
   if (isLabel20 && !/20-/.test(n) && !/\bHR\d+/i.test(n)) {
-    const forceM = n.match(/\b([A-Za-z]{0,2}\d{2,4}[A-Za-z]{0,3})\b/);
+    const forceM = n.match(/([A-Za-z]{0,2}\d{2,4}[A-Za-z]{0,3})([가-힣]*)/);
     if (forceM) {
       const fc = forceM[1];
       const fm = fc.match(/^([A-Za-z]{0,2}\d{2,4})([A-Za-z]{0,3})$/);
@@ -519,6 +527,8 @@ function getPetitCode(name, skuId) {
       const fSuf = fm ? fm[2].toUpperCase() : "";
       if (fSuf === "A") return ("20-" + fNum + "A").toUpperCase();
       if (fSuf) { const fc2 = inferColorCode(fSuf); if (fc2) return ("20-" + fNum + fc2).toUpperCase(); }
+      const fKorColor = forceM[2] || "";
+      if (fKorColor) { const fkc = inferColorCode(fKorColor); if (fkc) return ("20-" + fNum + fkc).toUpperCase(); }
       const fRest = n.slice(n.indexOf(fc) + fc.length);
       const fc3 = inferColorCode(fRest + n);
       if (fc3) return ("20-" + fNum + fc3).toUpperCase();
@@ -585,8 +595,13 @@ function inferColorCode(s) {
   if (/분홍|핑크/.test(s)) return "(분홍)";
   if (/보라/.test(s)) return "(보라)";
   if (/투명/.test(s)) return "(투명)";
-  if (/은색|실버|\bSL\b|\bSV\b/.test(s)) return "(은색)";
-  if (/금색|골드|\bGD\b/.test(s)) return "(금색)";
+  if (/은색|실버|은박|\bSL\b|\bSV\b/.test(s)) return "(은색)";
+  if (/금색|골드|금박|\bGD\b/.test(s)) return "(금색)";
+  if (/옐로우|옐로|YELLOW/i.test(s)) return "(노랑)";
+  if (/레드/i.test(s)) return "(빨강)";
+  if (/그린/i.test(s)) return "(초록)";
+  if (/퍼플|바이올렛/i.test(s)) return "(보라)";
+  if (/블루/i.test(s)) return "(파랑)";
   if (/금색|골드/.test(s)) return "(금색)";
   // 영문 코드: 문자열 끝에 오는 영문만 (FO, BL, BK, R, B, G 등)
   const engM = s.match(/([A-Z]{1,3})$/i);
