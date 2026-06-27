@@ -805,24 +805,25 @@ function buildFloemExcel(processed) {
   [1,2,3,4,5,6,7,8,9,10].forEach((pq) => {
     const pm = packMap3[pq];
     if (!pm) return;
-    ws3Data.push([`▶ ${pq}개입 (총 ${pm.totalQty}개 / ${pm.totalCount}행)`,"","","","","",""]);
+    ws3Data.push([`▶ ${pq}개입 — 총 ${pm.totalQty}개`,"","","","",""]);
     const entries = Object.values(pm.codeMap)
       .sort((a,b) => {
         if (a.hasError !== b.hasError) return a.hasError ? -1 : 1; // 오류 먼저
         return a.code.localeCompare(b.code) || Number(a.skuId)-Number(b.skuId);
       });
     entries.forEach(v => {
-      const bqDisplay = v.hasError ? "⚠ 확인필요" : v.barcodeQty;
-      ws3Data.push(["", v.code, v.qty, v.skuName, v.barcode, bqDisplay]);
+      const bqCalc = v.qty % pq === 0 ? v.qty / pq : null;
+      const bqDisplay = bqCalc === null ? "⚠ 확인필요" : bqCalc;
+      ws3Data.push([pq, v.code, v.qty, v.skuName, v.barcode, bqDisplay]);
     });
   });
   const noPackItems3 = processed.filter(x => !x.noQty && !x.packQty);
   if (noPackItems3.length > 0) {
-    ws3Data.push(["▶ 개입수 미확인","","","","","","",""]);    noPackItems3.forEach(item => {
+    ws3Data.push(["▶ 개입수 미확인","","","","",""]);    noPackItems3.forEach(item => {
       const key = item.displayName || item.code || String(item.row[2]||"").trim();
       const q = item.row[4]!=null ? Number(item.row[4]) : 0;
       const bc3 = item.row[3] != null ? String(item.row[3]) : "";
-      ws3Data.push(["", key, q, String(item.row[2]||""), bc3, q]);
+      ws3Data.push(["?", key, q, String(item.row[2]||""), bc3, "⚠ 확인필요"]);
     });
   }
 
@@ -974,7 +975,7 @@ function buildPetitExcel(processed) {
     const pm = packMap[pq];
     if (!pm) return;
     // 섹션 헤더
-    ws3Data.push([`▶ ${pq}개입 (총 ${pm.totalQty}개 / ${pm.totalCount}행)`,"","","","","",""]);
+    ws3Data.push([`▶ ${pq}개입 — 총 ${pm.totalQty}개`,"","","","",""]);
     // 품목별 행
     const entries = Object.values(pm.codeMap)
       .sort((a,b) => {
@@ -982,18 +983,19 @@ function buildPetitExcel(processed) {
         return a.code.localeCompare(b.code) || Number(a.skuId)-Number(b.skuId);
       });
     entries.forEach(v => {
-      const bqDisplay = v.hasError ? "⚠ 확인필요" : v.barcodeQty;
-      ws3Data.push(["", v.code, v.qty, v.skuName, v.barcode, bqDisplay]);
+      const bqCalc = v.qty % pq === 0 ? v.qty / pq : null;
+      const bqDisplay = bqCalc === null ? "⚠ 확인필요" : bqCalc;
+      ws3Data.push([pq, v.code, v.qty, v.skuName, v.barcode, bqDisplay]);
     });
   });
   // 개입수 없는 항목
   const noPackItems = processed.filter(x => !x.noQty && !x.packQty);
   if (noPackItems.length > 0) {
-    ws3Data.push(["▶ 개입수 미확인","","","","","","",""]);    noPackItems.forEach(item => {
+    ws3Data.push(["▶ 개입수 미확인","","","","",""]);    noPackItems.forEach(item => {
       const key = item.code || String(item.row[2]||"").trim();
       const q = item.row[4]!=null ? Number(item.row[4]) : 0;
       const bc = item.row[3] != null ? String(item.row[3]) : "";
-      ws3Data.push(["", key, q, String(item.row[2]||""), bc, q]);
+      ws3Data.push(["?", key, q, String(item.row[2]||""), bc, "⚠ 확인필요"]);
     });
   }
 
