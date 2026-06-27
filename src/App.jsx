@@ -833,10 +833,6 @@ function buildFloemExcel(processed) {
   const ws3TotalOQ = Object.values(packMap3).reduce((s,pm) =>
     s + Object.values(pm.codeMap).reduce((a,v) => a + v.orderQtySum, 0), 0);
   ws3Data.push(["▶ 합계", "", ws3TotalOQ, "", "", "", ""]);
-  // 전체 합계 행
-  const ws3TotalOQP = Object.values(packMap).reduce((s,pm) =>
-    s + Object.values(pm.codeMap).reduce((a,v) => a + v.orderQtySum, 0), 0);
-  ws3Data.push(["▶ 합계", "", ws3TotalOQP, "", "", "", ""]);
   const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
   ws3["!cols"] = [{wch:26},{wch:18},{wch:14},{wch:50},{wch:18},{wch:10},{wch:10}];
   const yFill3 = { patternType:"solid", fgColor:{ rgb:"FFE500" } };
@@ -1008,6 +1004,10 @@ function buildPetitExcel(processed) {
       ws3Data.push(["?", key, q, String(item.row[2]||""), bc, "⚠ 확인필요", item.row[7]||""]);
     });
   }
+  // 전체 합계 행
+  const ws3TotalOQP = Object.values(packMap).reduce((s,pm) =>
+    s + Object.values(pm.codeMap).reduce((a,v) => a + v.qty, 0), 0);
+  ws3Data.push(["▶ 합계", "", ws3TotalOQP, "", "", "", ""]);
   const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
   ws3["!cols"] = [{wch:26},{wch:18},{wch:14},{wch:50},{wch:18},{wch:10},{wch:10}];
 
