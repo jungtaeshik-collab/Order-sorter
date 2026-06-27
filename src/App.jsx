@@ -787,7 +787,7 @@ function buildFloemExcel(processed) {
     const skuName = String(item.row[2]||"").trim();
     const barcode = item.row[3] != null ? String(item.row[3]) : "";
     const orderQty = item.row[4] != null ? Number(item.row[4]) : 0;
-    const price = item.row[10] != null ? item.row[10] : "";
+    const price = item.row[9] != null ? item.row[9] : "";
     const pm = packMap3[pq];
     const ckey = key + "_" + skuId;
     if (!pm.codeMap[ckey]) pm.codeMap[ckey] = { code:key, skuName, qty:0, orderQtySum:0, count:0, skuId, barcode, hasError:false, price:0 };
@@ -823,10 +823,18 @@ function buildFloemExcel(processed) {
       const key = item.displayName || item.code || String(item.row[2]||"").trim();
       const q = item.row[4]!=null ? Number(item.row[4]) : 0;
       const bc3 = item.row[3] != null ? String(item.row[3]) : "";
-      ws3Data.push(["?", key, q, String(item.row[2]||""), bc3, "⚠ 확인필요", item.row[10]||""]);
+      ws3Data.push(["?", key, q, String(item.row[2]||""), bc3, "⚠ 확인필요", item.row[9]||""]);
     });
   }
 
+  // 전체 합계 행
+  const ws3TotalOQ = Object.values(packMap3).reduce((s,pm) =>
+    s + Object.values(pm.codeMap).reduce((a,v) => a + v.orderQtySum, 0), 0);
+  ws3Data.push(["▶ 합계", "", ws3TotalOQ, "", "", "", ""]);
+  // 전체 합계 행
+  const ws3TotalOQP = Object.values(packMap).reduce((s,pm) =>
+    s + Object.values(pm.codeMap).reduce((a,v) => a + v.orderQtySum, 0), 0);
+  ws3Data.push(["▶ 합계", "", ws3TotalOQP, "", "", "", ""]);
   const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
   ws3["!cols"] = [{wch:26},{wch:18},{wch:14},{wch:50},{wch:18},{wch:10},{wch:10}];
   const yFill3 = { patternType:"solid", fgColor:{ rgb:"FFE500" } };
@@ -956,7 +964,7 @@ function buildPetitExcel(processed) {
     const skuName = String(item.row[2]||"").trim();
     const barcode = item.row[3] != null ? String(item.row[3]) : "";
     const orderQty = item.row[4] != null ? Number(item.row[4]) : 0;
-    const price = item.row[10] != null ? item.row[10] : "";
+    const price = item.row[9] != null ? item.row[9] : "";
     const pm = packMap[pq];
     const ckey = key + "_" + skuId;
     if (!pm.codeMap[ckey]) pm.codeMap[ckey] = { code:key, skuName, qty:0, orderQtySum:0, count:0, skuId, barcode, hasError:false, price:0 };
@@ -993,7 +1001,7 @@ function buildPetitExcel(processed) {
       const key = item.code || String(item.row[2]||"").trim();
       const q = item.row[4]!=null ? Number(item.row[4]) : 0;
       const bc = item.row[3] != null ? String(item.row[3]) : "";
-      ws3Data.push(["?", key, q, String(item.row[2]||""), bc, "⚠ 확인필요", item.row[10]||""]);
+      ws3Data.push(["?", key, q, String(item.row[2]||""), bc, "⚠ 확인필요", item.row[9]||""]);
     });
   }
   const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
