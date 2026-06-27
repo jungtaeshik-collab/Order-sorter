@@ -199,7 +199,7 @@ const PETIT_SKU_CODE_MAP = {
 // SKU ID → 강제 개입수 (브랜드 공통)
 const SKU_ID_PACK_QTY = {
   // 1개입
-  "2134831":1,"2134840":1,
+  "2134831":1,"2134840":1,"2113961":1,"10233599":1,
   "2044918":1,"2096645":1,"2044941":1,"2113960":1,"2113978":1,
   "2114007":1,"2114011":1,"10221254":1,"2044963":1,
   "547994":1,"547812":1,"547870":1,"547872":1,"547918":1,"547920":1,"547922":1,"547931":1,"547987":1,"547808":1,"547809":1,"547817":1,"547830":1,"547839":1,"547844":1,"547845":1,"547855":1,"547868":1,"547883":1,"547890":1,"547897":1,"547898":1,"547909":1,"547910":1,"547916":1,"547921":1,"547924":1,"547929":1,"547934":1,"547943":1,"547952":1,"547954":1,"547970":1,"547975":1,"547999":1,"548000":1,"548002":1,"548009":1,"548010":1,"548015":1,"547944":1,"547838":1,"547903":1,"547951":1,"547816":1,"548001":1,
@@ -787,8 +787,7 @@ function buildFloemExcel(processed) {
     const skuName = String(item.row[2]||"").trim();
     const barcode = item.row[3] != null ? String(item.row[3]) : "";
     const orderQty = item.row[4] != null ? Number(item.row[4]) : 0;
-    const barcodeQtyRaw = pq > 0 ? orderQty / pq : orderQty;
-    const barcodeQty = (pq > 0 && orderQty % pq === 0) ? barcodeQtyRaw : null; // 안나눠지면 null
+    const price = item.row[10] != null ? item.row[10] : "";
     const pm = packMap3[pq];
     const ckey = key + "_" + skuId;
     if (!pm.codeMap[ckey]) pm.codeMap[ckey] = { code:key, skuName, qty:0, orderQtySum:0, count:0, skuId, barcode, hasError:false, price:0 };
