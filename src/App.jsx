@@ -243,7 +243,7 @@ const SKU_ID_PACK_QTY = {
 
 function getFloemCode(name) {
   if (!name) return null;
-  name = name.replace(/ver\.?\d+/gi,"").replace(/v\.?\d+(?=\s|$|\))/gi,"");
+  name = name.replace(/\bver\.?\d+\b/gi,"");  // ver1, ver2 등만 제거 (V1207 등은 유지)
   const packM = name.match(/Pack_([A-Za-z]{1,4}[\d][\w\-.]*)/);
   if (packM) return normalize(packM[1]);
   const hyM = name.match(/\b([A-Za-z]{1,4})-(\d[\w\-]*)/);
