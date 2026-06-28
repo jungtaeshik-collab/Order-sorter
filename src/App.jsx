@@ -738,7 +738,7 @@ function buildFloemExcel(processed) {
       }
     }
   });
-  ws1XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
+  XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
 
   // 시트2
   const codeMap = {}, noQtyMap = {};
@@ -773,7 +773,7 @@ function buildFloemExcel(processed) {
   ws2Data.push(["▶ 합계",totalQty,totalCount]);
   const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
   ws2["!cols"] = [{wch:30},{wch:16},{wch:8}];
-  ws2XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
+  XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
 
   // 시트3: 개입수별 합계
   const packMap3 = {};
@@ -846,7 +846,7 @@ function buildFloemExcel(processed) {
       }
     }
   });
-  ws3XLSX.utils.book_append_sheet(wb, ws3, "개입수별 합계");
+  XLSX.utils.book_append_sheet(wb, ws3, "개입수별 합계");
   XLSX.writeFile(wb, "발주정렬결과_플로엠.xlsx");
 }
 
@@ -900,7 +900,7 @@ function buildPetitExcel(processed) {
       }
     }
   });
-  ws1XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
+  XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
 
   // 시트2: 품목코드 기준, 모든 SKU ID별 행 표시 + 개입수 포함
   const codeMap = {}, noQtyMap2 = {};
@@ -948,7 +948,7 @@ function buildPetitExcel(processed) {
   ws2Data.push(["▶ 합계",totalQty,"",totalCount,""]);
   const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
   ws2["!cols"] = [{wch:18},{wch:14},{wch:8},{wch:6},{wch:55}];
-  ws2XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
+  XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
 
   // 시트3: 개입수별 합계
   const packMap = {};
@@ -1024,7 +1024,7 @@ function buildPetitExcel(processed) {
     }
   });
 
-  ws3XLSX.utils.book_append_sheet(wb, ws3, "개입수별 합계");
+  XLSX.utils.book_append_sheet(wb, ws3, "개입수별 합계");
   XLSX.writeFile(wb, "발주정렬결과_쁘띠팬시.xlsx");
 }
 
