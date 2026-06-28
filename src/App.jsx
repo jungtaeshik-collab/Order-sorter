@@ -124,8 +124,9 @@ function extractPackQty(name) {
   if (!name) return null;
   const n = name;
 
-  // 소음방지보드는 매 단위 무시, 개/개입만
+  // 소음방지보드, FL4시리즈는 100매 무시
   const isSoundBoard = /소음방지보드/.test(n);
+  const isFL4 = /FL4/i.test(n);
 
   // 괄호 있는 패턴 우선
   let m = n.match(/\((\d+)개입\)/);
@@ -144,10 +145,14 @@ function extractPackQty(name) {
   // N장 → N매입
   m = n.match(/(\d+)장/);
   if (m) return parseInt(m[1], 10);
-  // N매 → N개입 (소음방지보드 제외)
+  // N매 → N개입 (소음방지보드 제외, FL4에서 100매 무시)
   if (!isSoundBoard) {
     m = n.match(/(\d+)매(?!입)/);
-    if (m) return parseInt(m[1], 10);
+    if (m) {
+      const val = parseInt(m[1], 10);
+      if (isFL4 && val === 100) return null; // FL4 100매 무시
+      return val;
+    }
   }
 
   return null;
@@ -303,7 +308,9 @@ function processFloem(merged, masterCodes) {
     const group = getFloemGroup(code);
     const [sortNum, sortSuffix] = getFloemSortKey(code);
     const rawPackQty = extractPackQty(nameStr);
-    const packQty = SKU_ID_PACK_QTY[skuId] != null ? SKU_ID_PACK_QTY[skuId] : rawPackQty;
+    let packQty = SKU_ID_PACK_QTY[skuId] != null ? SKU_ID_PACK_QTY[skuId] : rawPackQty;
+    // FL4 시리즈는 항상 1개입
+    if (code && code.startsWith("FL4")) packQty = 1;
     const eVal = row[4];
     const eNum = eVal != null && eVal !== "" ? Number(eVal) : null;
     const total = eNum != null && packQty != null ? eNum * packQty : null;
@@ -1238,10 +1245,3 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          </div>
-        )}
-      </main>
-    </div>
-  );
-}
