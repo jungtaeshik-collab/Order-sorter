@@ -698,37 +698,40 @@ function getPetitGroupLabel(item) {
 // ══════════════════════════════════════════════
 // ── 엑셀 생성 ──
 // ══════════════════════════════════════════════
-// 엑셀 1행 고정 - JSZip으로 XML 직접 수정
+// 엑셀 1행 고정 - XLSX buffer에서 XML 직접 수정
 async function writeFrozenXlsx(wb, filename) {
   const freezeXml = '<sheetViews><sheetView tabSelected="1" workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft"/></sheetView></sheetViews>';
   try {
-    const buf = XLSX.write(wb, { type:"array", bookType:"xlsx" });
+    // JSZip CDN 로드
     if (!window.JSZip) {
-      await new Promise((res, rej) => {
-        const s = document.createElement("script");
-        s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
-        s.onload = res; s.onerror = rej;
-        document.head.appendChild(s);
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
       });
     }
+    const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
     const zip = await window.JSZip.loadAsync(buf);
-    const sheetFiles = Object.keys(zip.files).filter(n => /xl\/worksheets\/sheet\d+\.xml/.test(n));
-    for (const sn of sheetFiles) {
+    const sheetFiles = Object.keys(zip.files).filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n));
+    await Promise.all(sheetFiles.map(async (sn) => {
       let xml = await zip.files[sn].async("string");
-      if (/<sheetViews>/.test(xml)) {
+      if (xml.includes("<sheetViews>")) {
         xml = xml.replace(/<sheetViews>[\s\S]*?<\/sheetViews>/, freezeXml);
       } else {
         xml = xml.replace("<sheetData>", freezeXml + "<sheetData>");
       }
       zip.file(sn, xml);
-    }
-    const newBuf = await zip.generateAsync({ type:"uint8array", compression:"DEFLATE" });
-    const blob = new Blob([newBuf], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    }));
+    const newBuf = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+    const blob = new Blob([newBuf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } catch(e) {
-    console.warn("freeze 실패, 기본 방식:", e);
+  } catch (e) {
+    console.warn("freeze 실패, 기본 방식:", e.message);
     XLSX.writeFile(wb, filename);
   }
 }
