@@ -698,7 +698,42 @@ function getPetitGroupLabel(item) {
 // ══════════════════════════════════════════════
 // ── 엑셀 생성 ──
 // ══════════════════════════════════════════════
-function buildFloemExcel(processed) {
+// 엑셀 1행 고정 - JSZip으로 XML 직접 수정
+async function writeFrozenXlsx(wb, filename) {
+  const freezeXml = '<sheetViews><sheetView tabSelected="1" workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft"/></sheetView></sheetViews>';
+  try {
+    const buf = XLSX.write(wb, { type:"array", bookType:"xlsx" });
+    if (!window.JSZip) {
+      await new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+    const zip = await window.JSZip.loadAsync(buf);
+    const sheetFiles = Object.keys(zip.files).filter(n => /xl\/worksheets\/sheet\d+\.xml/.test(n));
+    for (const sn of sheetFiles) {
+      let xml = await zip.files[sn].async("string");
+      if (/<sheetViews>/.test(xml)) {
+        xml = xml.replace(/<sheetViews>[\s\S]*?<\/sheetViews>/, freezeXml);
+      } else {
+        xml = xml.replace("<sheetData>", freezeXml + "<sheetData>");
+      }
+      zip.file(sn, xml);
+    }
+    const newBuf = await zip.generateAsync({ type:"uint8array", compression:"DEFLATE" });
+    const blob = new Blob([newBuf], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch(e) {
+    console.warn("freeze 실패, 기본 방식:", e);
+    XLSX.writeFile(wb, filename);
+  }
+}
+
+async function buildFloemExcel(processed) {
   const wb = XLSX.utils.book_new();
   const wsData = [[
     "브랜드","SKU ID","SKU 이름","품목코드","SKU Barcode",
@@ -738,8 +773,7 @@ function buildFloemExcel(processed) {
       }
     }
   });
-  ws1["!freeze"] = { xSplit:0, ySplit:1 };
-  XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
+  ws1XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
 
   // 시트2
   const codeMap = {}, noQtyMap = {};
@@ -774,8 +808,7 @@ function buildFloemExcel(processed) {
   ws2Data.push(["▶ 합계",totalQty,totalCount]);
   const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
   ws2["!cols"] = [{wch:30},{wch:16},{wch:8}];
-  ws2["!freeze"] = { xSplit:0, ySplit:1 };
-  XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
+  ws2XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
 
   // 시트3: 개입수별 합계
   const packMap3 = {};
@@ -848,12 +881,11 @@ function buildFloemExcel(processed) {
       }
     }
   });
-  ws3["!freeze"] = { xSplit:0, ySplit:1 };
-  XLSX.utils.book_append_sheet(wb, ws3, "개입수별 합계");
-  XLSX.writeFile(wb, "발주정렬결과_플로엠.xlsx");
+  ws3XLSX.utils.book_append_sheet(wb, ws3, "개입수별 합계");
+  writeFrozenXlsx(wb, "발주정렬결과_플로엠.xlsx");
 }
 
-function buildPetitExcel(processed) {
+async function buildPetitExcel(processed) {
   const wb = XLSX.utils.book_new();
   const wsData = [[
     "브랜드","SKU ID","SKU 이름","품목코드","SKU Barcode",
@@ -903,8 +935,7 @@ function buildPetitExcel(processed) {
       }
     }
   });
-  ws1["!freeze"] = { xSplit:0, ySplit:1 };
-  XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
+  ws1XLSX.utils.book_append_sheet(wb, ws1, "정렬결과");
 
   // 시트2: 품목코드 기준, 모든 SKU ID별 행 표시 + 개입수 포함
   const codeMap = {}, noQtyMap2 = {};
@@ -952,8 +983,7 @@ function buildPetitExcel(processed) {
   ws2Data.push(["▶ 합계",totalQty,"",totalCount,""]);
   const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
   ws2["!cols"] = [{wch:18},{wch:14},{wch:8},{wch:6},{wch:55}];
-  ws2["!freeze"] = { xSplit:0, ySplit:1 };
-  XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
+  ws2XLSX.utils.book_append_sheet(wb, ws2, "품목별 합계");
 
   // 시트3: 개입수별 합계
   const packMap = {};
@@ -1029,9 +1059,8 @@ function buildPetitExcel(processed) {
     }
   });
 
-  ws3["!freeze"] = { xSplit:0, ySplit:1 };
-  XLSX.utils.book_append_sheet(wb, ws3, "개입수별 합계");
-  XLSX.writeFile(wb, "발주정렬결과_쁘띠팬시.xlsx");
+  ws3XLSX.utils.book_append_sheet(wb, ws3, "개입수별 합계");
+  writeFrozenXlsx(wb, "발주정렬결과_쁘띠팬시.xlsx");
 }
 
 // ══════════════════════════════════════════════
