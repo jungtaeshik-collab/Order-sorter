@@ -376,6 +376,18 @@ function processFloem(merged, masterCodes) {
           const guess = numM[1] + " 집게명찰 " + dirM[0];
           code = findPrefixMatch(guess, masterCodes) || guess;
         }
+      } else if (/해면기/.test(n2)) {
+        code = "해면기(통합)";
+      } else if (/모양자석/.test(n2)) {
+        const shapeM = n2.match(/꽃|하트|나비|스마일/);
+        if (shapeM) code = "모양자석 " + shapeM[0];
+      }
+    }
+    // P로 시작하는 품목코드(P0906 등)가 따로 있으면 우선 (B8사이즈 등 잘못 잡힌 코드 보정)
+    if (code) {
+      const pCodeM = nameStr.match(/\bP\d{4}\b/);
+      if (pCodeM && !code.startsWith("P")) {
+        code = pCodeM[0];
       }
     }
     const group = getFloemGroup(code);
