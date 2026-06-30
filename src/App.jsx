@@ -311,14 +311,19 @@ const FLOEM_GROUP_COLORS = {
 };
 function fgc(group) { return FLOEM_GROUP_COLORS[String(group)] || FLOEM_GROUP_COLORS[99]; }
 
+// findPrefixMatch 전용: 한글은 보존하고 기호/공백만 제거 (normalize는 한글까지 지워서 사용 불가)
+function normalizeKeepKorean(s) {
+  return s.replace(/[-_\s()\[\]]/g, "").toUpperCase();
+}
 function findPrefixMatch(text, masterCodes) {
-  // normalize 기준으로 마스터 코드가 text로 시작하는 항목 찾기 (가장 긴 것 우선)
-  const nt = normalize(text);
+  // 한글 보존 normalize 기준으로 마스터 코드가 text로 시작하는 항목 찾기 (가장 긴 것 우선)
+  const nt = normalizeKeepKorean(text);
+  if (!nt) return null;
   let best = null;
   for (const mc of masterCodes) {
-    const nmc = normalize(mc);
+    const nmc = normalizeKeepKorean(mc);
     if (nmc.startsWith(nt)) {
-      if (!best || nmc.length < normalize(best).length) best = mc;
+      if (!best || nmc.length < normalizeKeepKorean(best).length) best = mc;
     }
   }
   return best;
