@@ -195,6 +195,14 @@ const SKU_ID_MAP = {
   "59366014": "아크릴 홀더 1단",
   "64312192": "아크릴 홀더 검정 1단",
   "64312193": "아크릴 홀더 흰색 1단",
+  "10291650": "모니터용 메모보드[200] 토끼좌측용",
+  "10291652": "모니터용 메모보드[200] 토끼우측용",
+  "10291655": "모니터용 메모보드[300] 풍선좌우겸용",
+  "14149746": "모니터용 메모보드[300] 여자(좌측용)",
+  "10255245": "모니터용 메모보드[400] 상하단용 파랑",
+  "6560972": "500목걸이명찰 가로 20입",
+  "6560953": "500목걸이명찰 세로 10입",
+  "6560973": "150 집게명찰 가로 100입",
 };
 // 쁘띠 SKU ID → 강제 품목코드
 const PETIT_SKU_CODE_MAP = {
@@ -353,8 +361,16 @@ function processFloem(merged, masterCodes) {
         }
       } else if (/형광반사테이프/.test(n2)) {
         // 형광반사테이프(형광노랑-빨강화살표) → 마스터에서 prefix 매칭 (50MM 등 사이즈 무시)
-        const frM = n2.match(/(형광반사테이프\([^)]+\))/);
-        if (frM) code = findPrefixMatch(frM[1], masterCodes) || frM[1];
+        // 괄호 안 패턴 우선, 없으면 "형광반사테이프" 뒤 텍스트 추출
+        let frText = null;
+        const frM = n2.match(/형광반사테이프\s*\(([^)]+)\)/);
+        if (frM) {
+          frText = "형광반사테이프(" + frM[1] + ")";
+        } else {
+          const frM2 = n2.match(/형광반사테이프\s*([가-힣A-Za-z]+[-–][가-힣A-Za-z]+)/);
+          if (frM2) frText = "형광반사테이프(" + frM2[1] + ")";
+        }
+        if (frText) code = findPrefixMatch(frText, masterCodes) || frText;
       } else if (/목걸이명찰/.test(n2)) {
         const dirM = n2.match(/세로|가로/);
         const numM = n2.match(/^(\d+)/) || n2.match(/(\d+)\s*목걸이명찰/);
