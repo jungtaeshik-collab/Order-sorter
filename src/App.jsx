@@ -835,7 +835,7 @@ function buildFloemExcel(processed) {
       wsData.push([`▶  ${FLOEM_GROUP_LABELS[String(item.group)]} — 숫자 오름차순  (${cnt}개)`]);
     }
     const r = item.row;
-    wsData.push([r[0],r[1],r[2],item.code,r[3],r[4],item.packQty,item.total,
+    wsData.push([r[0],r[1],r[2],item.displayName || item.code,r[3],r[4],item.packQty,item.total,
       r[5],r[6],r[7],r[8],r[9],r[10],r[11],r[12],r[13],r[14],
       r[15],r[16],r[17],r[18],r[19],r[20],r[21],r[22],r[23]]);
   });
@@ -988,7 +988,7 @@ function buildPetitExcel(processed) {
       wsData.push([label]);
     }
     const r = item.row;
-    wsData.push([r[0],r[1],r[2],item.code,r[3],r[4],item.packQty,item.total,
+    wsData.push([r[0],r[1],r[2],item.displayName || item.code,r[3],r[4],item.packQty,item.total,
       r[5],r[6],r[7],r[8],r[9],r[10],r[11],r[12],r[13],r[14],
       r[15],r[16],r[17],r[18],r[19],r[20],r[21],r[22],r[23]]);
   });
@@ -1199,7 +1199,7 @@ export default function App() {
         const result = brand === "floem"
           ? processFloem(merged, masterCodes)
           : processPetit(merged, masterCodes);
-        const matched = result.filter(x => x.code).length;
+        const matched = result.filter(x => x.code || x.displayName).length;
         setStats({ total:result.length, matched, unmatched:result.length-matched });
         setProcessed(result);
         setStep("result");
