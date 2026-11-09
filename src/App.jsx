@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { BUILTIN_MASTER } from "./masterData";
 import { BUILTIN_MASTER_PETIT } from "./masterDataPetit";
-import { SKU_ID_MAP, PETIT_SKU_CODE_MAP, SKU_ID_PACK_QTY, SKIP_TO_FLOEM, FORCE_STICKER } from "./skuMapping";
+import { SKU_ID_MAP, PETIT_SKU_CODE_MAP, SKU_ID_PACK_QTY, SKIP_TO_FLOEM, FORCE_STICKER, SKU_ID_FLOEM_CODE } from "./skuMapping";
 import * as XLSX from "xlsx-js-style";
 import "./App.css";
 
@@ -336,6 +336,8 @@ function processFloem(merged, masterCodes) {
         code = pCodeM[0];
       }
     }
+    // SKU ID로 품목코드 강제 (숫자와 붙어 잘못 잡히는 플로엠 코드 교정; 시리즈 그룹 유지)
+    if (SKU_ID_FLOEM_CODE[skuId]) code = SKU_ID_FLOEM_CODE[skuId];
     const group = getFloemGroup(code);
     const [sortNum, sortSuffix] = getFloemSortKey(code);
     const rawPackQty = extractPackQty(nameStr);
